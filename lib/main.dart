@@ -33,9 +33,13 @@ class _VPNPageState extends State<VPNPage> {
   // Настройки
   bool bypassRussia = true; 
   String currentTheme = 'neon'; 
-  String configLink = ""; // Ссылка
+  String configLink = "";
+  int currentServer = 0;
   
   final TextEditingController _linkController = TextEditingController();
+  
+  // Серверы (заглушка, так как нет API для парсинга. Если есть ссылка на подписку, тут будет список)
+  List<String> servers = ["🇳🇱 Нидерланды · TCP", "🇷🇺 Россия · TCP", "🇹🇷 Турция · TCP", "🇵🇱 Польша · TCP"];
 
   @override
   void initState() {
@@ -215,6 +219,7 @@ class _VPNPageState extends State<VPNPage> {
           child: SingleChildScrollView(
             child: Column(
               children: [
+                // Шапка
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: Row(
@@ -234,6 +239,7 @@ class _VPNPageState extends State<VPNPage> {
                   ),
                 ),
 
+                // Кнопка
                 const SizedBox(height: 20),
                 Center(
                   child: GestureDetector(
@@ -273,6 +279,7 @@ class _VPNPageState extends State<VPNPage> {
                 ),
                 const SizedBox(height: 30),
 
+                // Карточки
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -283,6 +290,43 @@ class _VPNPageState extends State<VPNPage> {
                 ),
                 const SizedBox(height: 20),
 
+                // Список серверов
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Серверы', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                        const SizedBox(height: 10),
+                        ...servers.asMap().entries.map((entry) {
+                          return GestureDetector(
+                            onTap: () => setState(() => currentServer = entry.key),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: currentServer == entry.key ? colors['accent']!.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: currentServer == entry.key ? colors['accent']! : Colors.transparent),
+                              ),
+                              child: Text(entry.value, style: const TextStyle(color: Colors.white)),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Переключатель
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Container(
