@@ -15,21 +15,18 @@ jobs:
         with:
           flutter-version: '3.50.0'
 
-      # Удаляем старую папку android, чтобы Flutter создал её заново
+      - name: Clean
+        run: flutter clean
+
       - name: Remove old android
         run: rm -rf android
 
-      # Создаем новую папку android с правильными настройками
       - name: Create new android
         run: flutter create . --platforms=android
 
-      - name: Install dependencies
-        run: flutter pub get
+      - run: flutter pub get
+      - run: flutter build apk --release
 
-      - name: Build APK
-        run: flutter build apk --release
-
-      # Сохраняем APK как артефакт (без создания релиза, чтобы не было ошибки 403)
       - uses: actions/upload-artifact@v4
         with:
           name: release-apk
