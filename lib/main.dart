@@ -25,13 +25,12 @@ class VPNPage extends StatefulWidget {
 }
 
 class _VPNPageState extends State<VPNPage> {
-  // ССЫЛКА НА ТВОЙ СЕРВЕР
+  // ССЫЛКА (ВСТАВЬ СВОЮ)
   final String configLink = "vless://5ddb9ba9-79b9-4dc4-83e4-f4767963c229@0988b3t.nl18.h1clayd.click:443?type=tcp&security=reality&sni=0988b3t.nl18.h1clayd.click&fp=firefox&pbk=U0rnaVzuOd8A5Xt09wyYR9on1a5GLa7yo-O9hLsNI1I&sid=240f9135b8ebc770&spx=%2F&encryption=none#MONTA";
 
   late final V2ray v2ray;
   bool isLoading = false;
   String connectionState = 'DISCONNECTED';
-  bool isDarkTheme = true; // Флаг для переключения тем
 
   @override
   void initState() {
@@ -88,150 +87,147 @@ class _VPNPageState extends State<VPNPage> {
     }
   }
 
-  void toggleTheme() {
-    setState(() {
-      isDarkTheme = !isDarkTheme;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     bool isConnected = connectionState == 'CONNECTED';
 
-    // Цвета для тем
-    Color bgColor = isDarkTheme ? const Color(0xFF0A0812) : const Color(0xFF120B07);
-    Color accentColor = isDarkTheme ? const Color(0xFFFF2BD6) : const Color(0xFFFF8A1F);
-    Color accentColor2 = isDarkTheme ? const Color(0xFF7B2CFF) : const Color(0xFFC2391B);
-
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: RadialGradient(
-            center: const Alignment(-0.8, -0.8),
+            center: Alignment(-0.8, -0.8),
             radius: 1.5,
             colors: [
-              bgColor,
-              isDarkTheme ? const Color(0xFF1B0B3F) : const Color(0xFF3F1B0B),
+              Color(0xFF0A0812),
+              Color(0xFF1B0B3F),
             ],
           ),
         ),
         child: SafeArea(
-          child: Stack(
-            children: [
-              // Кнопка переключения темы
-              Positioned(
-                top: 10,
-                right: 20,
-                child: IconButton(
-                  icon: Icon(Icons.color_lens, color: accentColor),
-                  onPressed: toggleTheme,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Логотип/Иконка
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: isConnected ? Colors.green.withValues(alpha: 0.5) : const Color(0xFFFF2BD6).withValues(alpha: 0.5),
+                        blurRadius: 30,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.shield,
+                    size: 50,
+                    color: isConnected ? Colors.green : const Color(0xFFFF2BD6),
+                  ),
                 ),
-              ),
-              
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Заголовок
-                    const Text(
-                      'MONTA VPN',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.5,
-                        color: Colors.white,
-                      ),
+                const SizedBox(height: 20),
+                
+                // Название
+                const Text(
+                  'MONTA VPN',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 2,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                
+                // Статус
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isConnected ? Colors.green.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(
+                      color: isConnected ? Colors.green : Colors.grey,
                     ),
-                    const SizedBox(height: 10),
-                    
-                    // Чип статуса
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isConnected ? Colors.green.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isConnected ? Colors.green : Colors.grey,
-                        ),
-                      ),
-                      child: Text(
-                        isConnected ? 'ЗАЩИЩЕНО' : 'ОТКЛЮЧЕНО',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isConnected ? Colors.green : Colors.grey,
-                        ),
-                      ),
+                  ),
+                  child: Text(
+                    isConnected ? 'ЗАЩИЩЕНО' : 'НЕ ЗАЩИЩЕНО',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: isConnected ? Colors.green : Colors.grey,
                     ),
-                    const SizedBox(height: 40),
+                  ),
+                ),
+                const SizedBox(height: 50),
 
-                    // Большая кнопка подключения
-                    GestureDetector(
-                      onTap: isLoading ? null : toggleVPN,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        width: 160,
-                        height: 160,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: isConnected
-                                ? [Colors.redAccent, Colors.red]
-                                : [accentColor, accentColor2],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (isConnected ? Colors.redAccent : accentColor).withValues(alpha: 0.5),
-                              blurRadius: 40,
-                              spreadRadius: 10,
-                            ),
-                          ],
+                // Кнопка подключения (Большая, с анимацией)
+                GestureDetector(
+                  onTap: isLoading ? null : toggleVPN,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    width: 200,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: isConnected
+                            ? [Colors.redAccent, Colors.red]
+                            : [const Color(0xFFFF2BD6), const Color(0xFF7B2CFF)],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isConnected ? Colors.redAccent : const Color(0xFFFF2BD6)).withValues(alpha: 0.6),
+                          blurRadius: 50,
+                          spreadRadius: 15,
                         ),
-                        child: isLoading
-                            ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                            : Icon(
-                                Icons.power_settings_new,
-                                size: 80,
-                                color: Colors.white,
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-
-                    // Текст под кнопкой
-                    Text(
-                      isConnected ? 'VPN Включен' : 'Нажмите кнопку, чтобы подключиться',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey[400],
-                      ),
-                    ),
-                    const SizedBox(height: 50),
-
-                    // Карточки (Трафик и Пинг)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildInfoCard('Трафик', '0.00 ГБ', 'использовано'),
-                        const SizedBox(width: 15),
-                        _buildInfoCard('Пинг', '— мс', 'задержка'),
                       ],
                     ),
+                    child: isLoading
+                        ? const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 4))
+                        : Icon(
+                            Icons.power_settings_new,
+                            size: 90,
+                            color: Colors.white,
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 40),
+
+                // Текст-подсказка
+                Text(
+                  isConnected ? 'Ваш трафик зашифрован' : 'Нажмите, чтобы включить VPN',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 80),
+
+                // Карточки с инфо
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildCard('Трафик', '0.00 ГБ'),
+                    const SizedBox(width: 20),
+                    _buildCard('Пинг', '— мс'),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // Виджет карточки
-  Widget _buildInfoCard(String title, String value, String subtitle) {
+  Widget _buildCard(String title, String value) {
     return Container(
-      width: 150,
+      width: 140,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
@@ -239,25 +235,19 @@ class _VPNPageState extends State<VPNPage> {
         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             title,
-            style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+            style: const TextStyle(fontSize: 12, color: Colors.grey),
           ),
           const SizedBox(height: 5),
           Text(
             value,
             style: const TextStyle(
-              fontSize: 18,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: TextStyle(fontSize: 11, color: Colors.grey[500]),
           ),
         ],
       ),
