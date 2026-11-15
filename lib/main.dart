@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 void main() => runApp(const MyApp());
 
@@ -12,7 +13,11 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Monta VPN',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(useMaterial3: true),
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        textTheme: GoogleFonts.manropeTextTheme(),
+        useMaterial3: true,
+      ),
       home: const MainScreen(),
     );
   }
@@ -27,38 +32,44 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
-
-  final List<Widget> _pages = [
-    const HomeTab(),
-    const SettingsTab(),
-  ];
+  final List<Widget> _pages = [const HomeTab(), const SettingsTab()];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
       body: _pages[_currentIndex],
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1B1E21),
-          border: Border(top: BorderSide(color: Colors.white12)),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
-          backgroundColor: const Color(0xFF1B1E21),
-          selectedItemColor: const Color(0xFFFF2BD6),
-          unselectedItemColor: Colors.grey,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Главная'),
-            BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Настройки'),
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1B1E21).withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: Colors.white12),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 20, offset: const Offset(0, 10)),
           ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: BottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: (index) => setState(() => _currentIndex = index),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            selectedItemColor: const Color(0xFFFF2BD6),
+            unselectedItemColor: Colors.grey,
+            items: const [
+              BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Главная'),
+              BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Настройки'),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// --- ВКЛАДКА ГЛАВНАЯ ---
+// --- ГЛАВНАЯ ---
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
 
@@ -66,13 +77,13 @@ class HomeTab extends StatefulWidget {
   State<HomeTab> createState() => _HomeTabState();
 }
 
-class _HomeTabState extends State<HomeTab> {
+class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   late final V2ray v2ray;
+  late AnimationController _pulseController;
   bool isLoading = false;
   String connectionState = 'DISCONNECTED';
   String configLink = "";
   
-  // Серверы (визуальный список)
   final List<Map<String, String>> servers = [
     {"name": "🇳🇱 Нидерланды · TCP", "protocol": "VLESS"},
     {"name": "🇷🇺 Россия · TCP", "protocol": "VLESS"},
@@ -85,6 +96,11 @@ class _HomeTabState extends State<HomeTab> {
   void initState() {
     super.initState();
     _loadSettings();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
     v2ray = V2ray(
       onStatusChanged: (status) {
         setState(() => connectionState = status.state);
@@ -94,6 +110,12 @@ class _HomeTabState extends State<HomeTab> {
       notificationIconResourceType: "mipmap",
       notificationIconResourceName: "ic_launcher",
     );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSettings() async {
@@ -108,24 +130,15 @@ class _HomeTabState extends State<HomeTab> {
       v2ray.stopV2Ray();
       return;
     }
-
     if (configLink.isEmpty) {
       _showErrorDialog('Вставьте ссылку в Настройках!');
       return;
     }
-
     setState(() => isLoading = true);
-
     try {
       V2RayURL parser = V2ray.parseFromURL(configLink);
-      String config = parser.getFullConfiguration();
-
       if (await v2ray.requestPermission()) {
-        v2ray.startV2Ray(
-          remark: parser.remark,
-          config: config,
-          proxyOnly: false,
-        );
+        v2ray.startV2Ray(remark: parser.remark, config: parser.getFullConfiguration(), proxyOnly: false);
       }
     } catch (e) {
       _showErrorDialog('Ошибка подключения: $e');
@@ -155,15 +168,15 @@ class _HomeTabState extends State<HomeTab> {
       decoration: const BoxDecoration(
         gradient: RadialGradient(
           center: Alignment(-0.8, -0.8),
-          radius: 1.5,
-          colors: [Color(0xFF0A0812), Color(0xFF1B0B3F)],
+          radius: 1.8,
+          colors: [Color(0xFF0A0812), Color(0xFF2A1050)],
         ),
       ),
       child: SafeArea(
         child: SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 100),
           child: Column(
             children: [
-              // Шапка
               Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: Row(
@@ -172,93 +185,151 @@ class _HomeTabState extends State<HomeTab> {
                     const SizedBox(width: 10),
                     const Text(
                       'Monta VPN',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 1),
                     ),
                   ],
                 ),
               ),
 
-              // Кнопка
+              // Кнопка с пульсацией
               Center(
                 child: GestureDetector(
                   onTap: isLoading ? null : toggleVPN,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: 180,
-                    height: 180,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: isConnected
-                            ? [Colors.green, Colors.greenAccent]
-                            : [const Color(0xFFFF2BD6), const Color(0xFF7B2CFF)],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (isConnected ? Colors.green : const Color(0xFFFF2BD6)).withValues(alpha: 0.6),
-                          blurRadius: 50,
-                          spreadRadius: 15,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Пульсирующее кольцо
+                      ScaleTransition(
+                        scale: Tween(begin: 0.9, end: 1.2).animate(_pulseController),
+                        child: Container(
+                          width: 200,
+                          height: 200,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: (isConnected ? Colors.green : const Color(0xFFFF2BD6)).withValues(alpha: 0.3),
+                              width: 2,
+                            ),
+                          ),
                         ),
-                      ],
-                    ),
-                    child: isLoading
-                        ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                        : const Icon(Icons.power_settings_new, size: 80, color: Colors.white),
+                      ),
+                      // Основная кнопка
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        width: 160,
+                        height: 160,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: isConnected
+                                ? [Colors.green, Colors.greenAccent]
+                                : [const Color(0xFFFF2BD6), const Color(0xFF7B2CFF)],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: (isConnected ? Colors.green : const Color(0xFFFF2BD6)).withValues(alpha: 0.7),
+                              blurRadius: 60,
+                              spreadRadius: 10,
+                            ),
+                          ],
+                        ),
+                        child: isLoading
+                            ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                            : const Icon(Icons.power_settings_new, size: 70, color: Colors.white),
+                      ),
+                    ],
                   ),
                 ),
               ),
               
-              const SizedBox(height: 20),
+              const SizedBox(height: 30),
               Text(
                 isConnected ? 'VPN Включен' : 'VPN Отключен',
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.manrope(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                isConnected ? 'Трафик зашифрован' : 'Нажмите кнопку для подключения',
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
               ),
               const SizedBox(height: 30),
 
-              // Карточки (трафик/пинг)
+              // Карточки
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildInfoCard('Трафик', '0.00 ГБ'),
+                  _buildInfoCard(Icons.download, 'Трафик', '0.00 ГБ'),
                   const SizedBox(width: 15),
-                  _buildInfoCard('Пинг', '— мс'),
+                  _buildInfoCard(Icons.speed, 'Пинг', '— мс'),
                 ],
               ),
               const SizedBox(height: 30),
 
-              // Список серверов
+              // Серверы
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(24),
                     border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Серверы', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Серверы', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                          const Icon(Icons.refresh, color: Colors.grey, size: 20),
+                        ],
+                      ),
                       const SizedBox(height: 10),
                       ...servers.asMap().entries.map((entry) {
                         return GestureDetector(
                           onTap: () => setState(() => currentServer = entry.key),
-                          child: Container(
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
                             margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: currentServer == entry.key ? const Color(0xFFFF2BD6).withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: currentServer == entry.key ? const Color(0xFFFF2BD6) : Colors.transparent),
+                              color: currentServer == entry.key
+                                  ? const Color(0xFFFF2BD6).withValues(alpha: 0.15)
+                                  : Colors.white.withValues(alpha: 0.03),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: currentServer == entry.key ? const Color(0xFFFF2BD6) : Colors.transparent,
+                              ),
                             ),
                             child: Row(
                               children: [
-                                Text(entry.value["name"]!, style: const TextStyle(color: Colors.white)),
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.dns, color: Colors.grey, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(entry.value["name"]!, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
                                 const Spacer(),
-                                Text(entry.value["protocol"]!, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(entry.value["protocol"]!, style: const TextStyle(color: Colors.grey, fontSize: 10)),
+                                ),
                               ],
                             ),
                           ),
@@ -268,7 +339,6 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -276,19 +346,22 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
-  Widget _buildInfoCard(String title, String value) {
+  Widget _buildInfoCard(IconData icon, String title, String value) {
     return Container(
       width: 150,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Icon(icon, color: const Color(0xFFFF2BD6), size: 24),
+          const SizedBox(height: 10),
           Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 5),
+          const SizedBox(height: 2),
           Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
         ],
       ),
@@ -296,7 +369,7 @@ class _HomeTabState extends State<HomeTab> {
   }
 }
 
-// --- ВКЛАДКА НАСТРОЙКИ ---
+// --- НАСТРОЙКИ ---
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
 
@@ -327,68 +400,80 @@ class _SettingsTabState extends State<SettingsTab> {
     await prefs.setString('configLink', _linkController.text.trim());
     await prefs.setString('protocol', selectedProtocol);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Настройки сохранены!')),
+      const SnackBar(content: Text('Сохранено!')),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF0A0812),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF0A0812), Color(0xFF120B1A)],
+        ),
+      ),
       child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Настройки', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-              const SizedBox(height: 20),
+              Text('Настройки', style: GoogleFonts.manrope(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
+              const SizedBox(height: 30),
 
-              // Ссылка
-              const Text('Ссылка подписки', style: TextStyle(fontSize: 16, color: Colors.white)),
+              Text('Ссылка подписки', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               TextField(
                 controller: _linkController,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
                 maxLines: 3,
                 decoration: InputDecoration(
                   hintText: 'vless:// / vmess:// / trojan://',
                   hintStyle: const TextStyle(color: Colors.grey),
                   filled: true,
                   fillColor: Colors.white.withValues(alpha: 0.05),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                 ),
               ),
               const SizedBox(height: 20),
 
-              // Протокол
-              const Text('Протокол', style: TextStyle(fontSize: 16, color: Colors.white)),
+              Text('Протокол', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
-              DropdownButton<String>(
-                value: selectedProtocol,
-                dropdownColor: const Color(0xFF1B1E21),
-                style: const TextStyle(color: Colors.white),
-                isExpanded: true,
-                items: const [
-                  DropdownMenuItem(value: 'VLESS', child: Text('VLESS')),
-                  DropdownMenuItem(value: 'VMess', child: Text('VMess')),
-                  DropdownMenuItem(value: 'Trojan', child: Text('Trojan')),
-                ],
-                onChanged: (val) {
-                  if (val != null) setState(() => selectedProtocol = val);
-                },
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: DropdownButton<String>(
+                  value: selectedProtocol,
+                  dropdownColor: const Color(0xFF1B1E21),
+                  style: const TextStyle(color: Colors.white),
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  items: const [
+                    DropdownMenuItem(value: 'VLESS', child: Text('VLESS')),
+                    DropdownMenuItem(value: 'VMess', child: Text('VMess')),
+                    DropdownMenuItem(value: 'Trojan', child: Text('Trojan')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setState(() => selectedProtocol = val);
+                  },
+                ),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 40),
 
-              // Сохранить
               ElevatedButton(
                 onPressed: _saveSettings,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF2BD6),
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  minimumSize: const Size(double.infinity, 0),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: const Text('Сохранить настройки', style: TextStyle(color: Colors.white)),
+                child: const Text('Сохранить настройки', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
