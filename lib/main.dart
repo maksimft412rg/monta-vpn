@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() => runApp(const MyApp());
 
@@ -25,16 +26,20 @@ class VPNPage extends StatefulWidget {
 }
 
 class _VPNPageState extends State<VPNPage> {
-  // ССЫЛКА (ВСТАВЬ СВОЮ)
+  // ВСТАВЬ СВОЮ ССЫЛКУ (или несколько, если хочешь выбор)
   final String configLink = "vless://5ddb9ba9-79b9-4dc4-83e4-f4767963c229@0988b3t.nl18.h1clayd.click:443?type=tcp&security=reality&sni=0988b3t.nl18.h1clayd.click&fp=firefox&pbk=U0rnaVzuOd8A5Xt09wyYR9on1a5GLa7yo-O9hLsNI1I&sid=240f9135b8ebc770&spx=%2F&encryption=none#MONTA";
 
   late final V2ray v2ray;
   bool isLoading = false;
   String connectionState = 'DISCONNECTED';
+  
+  // Настройки (сохраняются)
+  bool bypassRussia = true; 
 
   @override
   void initState() {
     super.initState();
+    _loadSettings(); // Загружаем настройки при старте
     v2ray = V2ray(
       onStatusChanged: (status) {
         setState(() {
@@ -48,6 +53,20 @@ class _VPNPageState extends State<VPNPage> {
     );
   }
 
+  // --- СОХРАНЕНИЕ И ЗАГРУЗКА НАСТРОЕК ---
+  Future<void> _loadSettings() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      bypassRussia = prefs.getBool('bypassRussia') ?? true;
+    });
+  }
+
+  Future<void> _saveSettings() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('bypassRussia', bypassRussia);
+  }
+  // ---------------------------------------
+
   void toggleVPN() async {
     if (connectionState == 'CONNECTED') {
       v2ray.stopV2Ray();
@@ -58,11 +77,15 @@ class _VPNPageState extends State<VPNPage> {
 
     try {
       V2RayURL parser = V2ray.parseFromURL(configLink);
+      String config = parser.getFullConfiguration();
+
+      // Если бы был выбор серверов, тут бы подставлялся нужный.
+      // Обход РФ уже работает через настройки H1Cloud (если галочка там включена).
 
       if (await v2ray.requestPermission()) {
         v2ray.startV2Ray(
           remark: parser.remark,
-          config: parser.getFullConfiguration(),
+          config: config,
           proxyOnly: false,
         );
       }
@@ -104,118 +127,139 @@ class _VPNPageState extends State<VPNPage> {
           ),
         ),
         child: SafeArea(
-          child: Center(
+          child: SingleChildScrollView(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Логотип/Иконка
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: isConnected ? Colors.green.withValues(alpha: 0.5) : const Color(0xFFFF2BD6).withValues(alpha: 0.5),
-                        blurRadius: 30,
-                        spreadRadius: 5,
+                // Шапка
+                Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.shield, color: Colors.purpleAccent, size: 30),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'MONTA VPN',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.settings, color: Colors.grey),
+                        onPressed: () {},
                       ),
                     ],
                   ),
-                  child: Icon(
-                    Icons.shield,
-                    size: 50,
-                    color: isConnected ? Colors.green : const Color(0xFFFF2BD6),
-                  ),
                 ),
+
+                // Кнопка подключения
                 const SizedBox(height: 20),
-                
-                // Название
-                const Text(
-                  'MONTA VPN',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                
-                // Статус
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isConnected ? Colors.green.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(
-                      color: isConnected ? Colors.green : Colors.grey,
-                    ),
-                  ),
-                  child: Text(
-                    isConnected ? 'ЗАЩИЩЕНО' : 'НЕ ЗАЩИЩЕНО',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: isConnected ? Colors.green : Colors.grey,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 50),
-
-                // Кнопка подключения (Большая, с анимацией)
-                GestureDetector(
-                  onTap: isLoading ? null : toggleVPN,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: 200,
-                    height: 200,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: isConnected
-                            ? [Colors.redAccent, Colors.red]
-                            : [const Color(0xFFFF2BD6), const Color(0xFF7B2CFF)],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (isConnected ? Colors.redAccent : const Color(0xFFFF2BD6)).withValues(alpha: 0.6),
-                          blurRadius: 50,
-                          spreadRadius: 15,
+                Center(
+                  child: GestureDetector(
+                    onTap: isLoading ? null : toggleVPN,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      width: 200,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: isConnected
+                              ? [Colors.green, Colors.greenAccent]
+                              : [const Color(0xFFFF2BD6), const Color(0xFF7B2CFF)],
                         ),
-                      ],
-                    ),
-                    child: isLoading
-                        ? const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 4))
-                        : Icon(
-                            Icons.power_settings_new,
-                            size: 90,
-                            color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: (isConnected ? Colors.green : const Color(0xFFFF2BD6)).withValues(alpha: 0.6),
+                            blurRadius: 50,
+                            spreadRadius: 15,
                           ),
+                        ],
+                      ),
+                      child: isLoading
+                          ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                          : Icon(
+                              Icons.power_settings_new,
+                              size: 90,
+                              color: Colors.white,
+                            ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 40),
-
-                // Текст-подсказка
+                
+                const SizedBox(height: 20),
                 Text(
-                  isConnected ? 'Ваш трафик зашифрован' : 'Нажмите, чтобы включить VPN',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey,
-                  ),
+                  isConnected ? 'VPN Включен' : 'VPN Отключен',
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
-                const SizedBox(height: 80),
+                const SizedBox(height: 30),
 
-                // Карточки с инфо
+                // Карточки со статистикой (заглушки, так как нет API)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildCard('Трафик', '0.00 ГБ'),
-                    const SizedBox(width: 20),
-                    _buildCard('Пинг', '— мс'),
+                    _buildInfoCard('Трафик', '0.00 ГБ', 'использовано'),
+                    const SizedBox(width: 15),
+                    _buildInfoCard('Пинг', '— мс', 'задержка'),
                   ],
+                ),
+                const SizedBox(height: 20),
+
+                // Переключатели
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    children: [
+                      _buildSwitch('Обход РФ', 'Госуслуги и банки напрямую', bypassRussia, (val) {
+                        setState(() => bypassRussia = val);
+                        _saveSettings();
+                      }),
+                      const SizedBox(height: 10),
+                      _buildSwitch('Блокировка рекламы', 'Фильтрация на уровне DNS', false, (val) {}),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Кнопка "Позвать друга" и "Поддержка"
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {},
+                          icon: const Icon(Icons.share),
+                          label: const Text('Позвать друга'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white.withValues(alpha: 0.1),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {},
+                          icon: const Icon(Icons.support_agent),
+                          label: const Text('Поддержка'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white.withValues(alpha: 0.1),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 15),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -225,9 +269,9 @@ class _VPNPageState extends State<VPNPage> {
     );
   }
 
-  Widget _buildCard(String title, String value) {
+  Widget _buildInfoCard(String title, String value, String subtitle) {
     return Container(
-      width: 140,
+      width: 160,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
@@ -235,19 +279,40 @@ class _VPNPageState extends State<VPNPage> {
         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
-          ),
+          Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 5),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
+          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+          const SizedBox(height: 2),
+          Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSwitch(String title, String subtitle, bool value, Function(bool) onChanged) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+              Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+          Switch(
+            value: value,
+            activeColor: const Color(0xFFFF2BD6),
+            onChanged: onChanged,
           ),
         ],
       ),
