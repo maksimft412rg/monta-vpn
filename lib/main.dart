@@ -30,16 +30,19 @@ class _VPNPageState extends State<VPNPage> {
   bool isLoading = false;
   String connectionState = 'DISCONNECTED';
   
-  // Настройки
-  bool bypassRussia = true; 
-  String currentTheme = 'neon'; 
   String configLink = "";
+  String selectedProtocol = "VLESS";
+  
+  // Список серверов (для визуала, можно менять)
+  final List<Map<String, String>> servers = [
+    {"name": "🇳🇱 Нидерланды · TCP", "protocol": "VLESS"},
+    {"name": "🇷🇺 Россия · TCP", "protocol": "VLESS"},
+    {"name": "🇹🇷 Турция · TCP", "protocol": "VLESS"},
+    {"name": "🇵🇱 Польша · XHTTP", "protocol": "VLESS"},
+  ];
   int currentServer = 0;
-  
+
   final TextEditingController _linkController = TextEditingController();
-  
-  // Серверы (заглушка, так как нет API для парсинга. Если есть ссылка на подписку, тут будет список)
-  List<String> servers = ["🇳🇱 Нидерланды · TCP", "🇷🇺 Россия · TCP", "🇹🇷 Турция · TCP", "🇵🇱 Польша · TCP"];
 
   @override
   void initState() {
@@ -61,8 +64,6 @@ class _VPNPageState extends State<VPNPage> {
   Future<void> _loadSettings() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
-      bypassRussia = prefs.getBool('bypassRussia') ?? true;
-      currentTheme = prefs.getString('theme') ?? 'neon';
       configLink = prefs.getString('configLink') ?? "vless://5ddb9ba9-79b9-4dc4-83e4-f4767963c229@0988b3t.nl18.h1clayd.click:443?type=tcp&security=reality&sni=0988b3t.nl18.h1clayd.click&fp=firefox&pbk=U0rnaVzuOd8A5Xt09wyYR9on1a5GLa7yo-O9hLsNI1I&sid=240f9135b8ebc770&spx=%2F&encryption=none#MONTA";
       _linkController.text = configLink;
     });
@@ -70,8 +71,6 @@ class _VPNPageState extends State<VPNPage> {
 
   Future<void> _saveSettings() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('bypassRussia', bypassRussia);
-    await prefs.setString('theme', currentTheme);
     await prefs.setString('configLink', configLink);
   }
 
@@ -119,24 +118,10 @@ class _VPNPageState extends State<VPNPage> {
     }
   }
 
-  Map<String, Color> getThemeColors() {
-    switch (currentTheme) {
-      case 'autumn':
-        return {'bg': const Color(0xFF120B07), 'accent': const Color(0xFFFF8A1F), 'accent2': const Color(0xFFC2391B)};
-      case 'ice':
-        return {'bg': const Color(0xFF070C16), 'accent': const Color(0xFF34B6FF), 'accent2': const Color(0xFF3D5BFF)};
-      case 'hw':
-        return {'bg': const Color(0xFF0D0814), 'accent': const Color(0xFFFF7A00), 'accent2': const Color(0xFF8B2CFF)};
-      default:
-        return {'bg': const Color(0xFF0A0812), 'accent': const Color(0xFFFF2BD6), 'accent2': const Color(0xFF7B2CFF)};
-    }
-  }
-
   void _showSettingsDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) {
-        final colors = getThemeColors();
         return AlertDialog(
           backgroundColor: const Color(0xFF1B1E21),
           title: const Text('Настройки', style: TextStyle(color: Colors.white)),
@@ -148,7 +133,7 @@ class _VPNPageState extends State<VPNPage> {
                 style: const TextStyle(color: Colors.white, fontSize: 12),
                 maxLines: 3,
                 decoration: InputDecoration(
-                  hintText: 'Вставьте ссылку vless://...',
+                  hintText: 'Вставьте vless:// / vmess:// / trojan://',
                   hintStyle: const TextStyle(color: Colors.grey),
                   filled: true,
                   fillColor: Colors.white.withValues(alpha: 0.05),
@@ -159,21 +144,19 @@ class _VPNPageState extends State<VPNPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Тема:', style: TextStyle(color: Colors.white)),
+                  const Text('Протокол:', style: TextStyle(color: Colors.white)),
                   DropdownButton<String>(
-                    value: currentTheme,
+                    value: selectedProtocol,
                     dropdownColor: const Color(0xFF1B1E21),
                     style: const TextStyle(color: Colors.white),
                     items: const [
-                      DropdownMenuItem(value: 'neon', child: Text('Неон')),
-                      DropdownMenuItem(value: 'autumn', child: Text('Осень')),
-                      DropdownMenuItem(value: 'ice', child: Text('Лёд')),
-                      DropdownMenuItem(value: 'hw', child: Text('Хэллоуин')),
+                      DropdownMenuItem(value: 'VLESS', child: Text('VLESS')),
+                      DropdownMenuItem(value: 'VMess', child: Text('VMess')),
+                      DropdownMenuItem(value: 'Trojan', child: Text('Trojan')),
                     ],
                     onChanged: (val) {
                       if (val != null) {
-                        setState(() => currentTheme = val);
-                        _saveSettings();
+                        setState(() => selectedProtocol = val);
                       }
                     },
                   ),
@@ -184,13 +167,11 @@ class _VPNPageState extends State<VPNPage> {
           actions: [
             TextButton(
               onPressed: () {
-                setState(() {
-                  configLink = _linkController.text.trim();
-                });
+                setState(() => configLink = _linkController.text.trim());
                 _saveSettings();
                 Navigator.pop(ctx);
               },
-              child: Text('Сохранить', style: TextStyle(color: colors['accent'])),
+              child: const Text('Сохранить', style: TextStyle(color: Color(0xFFFF2BD6))),
             ),
           ],
         );
@@ -201,18 +182,14 @@ class _VPNPageState extends State<VPNPage> {
   @override
   Widget build(BuildContext context) {
     bool isConnected = connectionState == 'CONNECTED';
-    final colors = getThemeColors();
 
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: RadialGradient(
-            center: const Alignment(-0.8, -0.8),
+            center: Alignment(-0.8, -0.8),
             radius: 1.5,
-            colors: [
-              colors['bg']!,
-              colors['accent2']!.withValues(alpha: 0.3),
-            ],
+            colors: [Color(0xFF0A0812), Color(0xFF1B0B3F)],
           ),
         ),
         child: SafeArea(
@@ -224,7 +201,7 @@ class _VPNPageState extends State<VPNPage> {
                   padding: const EdgeInsets.all(20.0),
                   child: Row(
                     children: [
-                      Icon(Icons.shield, color: colors['accent'], size: 40),
+                      const Icon(Icons.shield, color: Color(0xFFFF2BD6), size: 40),
                       const SizedBox(width: 10),
                       const Text(
                         'Monta VPN',
@@ -232,7 +209,7 @@ class _VPNPageState extends State<VPNPage> {
                       ),
                       const Spacer(),
                       IconButton(
-                        icon: Icon(Icons.settings, color: colors['accent']),
+                        icon: const Icon(Icons.settings, color: Color(0xFFFF2BD6)),
                         onPressed: () => _showSettingsDialog(context),
                       ),
                     ],
@@ -240,14 +217,13 @@ class _VPNPageState extends State<VPNPage> {
                 ),
 
                 // Кнопка
-                const SizedBox(height: 20),
                 Center(
                   child: GestureDetector(
                     onTap: isLoading ? null : toggleVPN,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
-                      width: 200,
-                      height: 200,
+                      width: 180,
+                      height: 180,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: LinearGradient(
@@ -255,11 +231,11 @@ class _VPNPageState extends State<VPNPage> {
                           end: Alignment.bottomRight,
                           colors: isConnected
                               ? [Colors.green, Colors.greenAccent]
-                              : [colors['accent']!, colors['accent2']!],
+                              : [const Color(0xFFFF2BD6), const Color(0xFF7B2CFF)],
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.6),
+                            color: (isConnected ? Colors.green : const Color(0xFFFF2BD6)).withValues(alpha: 0.6),
                             blurRadius: 50,
                             spreadRadius: 15,
                           ),
@@ -267,7 +243,7 @@ class _VPNPageState extends State<VPNPage> {
                       ),
                       child: isLoading
                           ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                          : const Icon(Icons.power_settings_new, size: 90, color: Colors.white),
+                          : const Icon(Icons.power_settings_new, size: 80, color: Colors.white),
                     ),
                   ),
                 ),
@@ -279,18 +255,7 @@ class _VPNPageState extends State<VPNPage> {
                 ),
                 const SizedBox(height: 30),
 
-                // Карточки
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildInfoCard('Трафик', '0.00 ГБ', 'использовано'),
-                    const SizedBox(width: 15),
-                    _buildInfoCard('Пинг', '— мс', 'задержка'),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Список серверов
+                // Выбор сервера
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Container(
@@ -312,11 +277,17 @@ class _VPNPageState extends State<VPNPage> {
                               margin: const EdgeInsets.only(bottom: 8),
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: currentServer == entry.key ? colors['accent']!.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
+                                color: currentServer == entry.key ? const Color(0xFFFF2BD6).withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: currentServer == entry.key ? colors['accent']! : Colors.transparent),
+                                border: Border.all(color: currentServer == entry.key ? const Color(0xFFFF2BD6) : Colors.transparent),
                               ),
-                              child: Text(entry.value, style: const TextStyle(color: Colors.white)),
+                              child: Row(
+                                children: [
+                                  Text(entry.value["name"]!, style: const TextStyle(color: Colors.white)),
+                                  const Spacer(),
+                                  Text(entry.value["protocol"]!, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                ],
+                              ),
                             ),
                           );
                         }),
@@ -324,67 +295,12 @@ class _VPNPageState extends State<VPNPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-
-                // Переключатель
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Обход РФ', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                            Text('Госуслуги и банки напрямую', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                          ],
-                        ),
-                        Switch(
-                          value: bypassRussia,
-                          activeColor: colors['accent'],
-                          onChanged: (val) {
-                            setState(() => bypassRussia = val);
-                            _saveSettings();
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                
                 const SizedBox(height: 20),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildInfoCard(String title, String value, String subtitle) {
-    return Container(
-      width: 160,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 5),
-          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-          const SizedBox(height: 2),
-          Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-        ],
       ),
     );
   }
