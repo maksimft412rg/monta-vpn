@@ -7,8 +7,34 @@ import 'package:google_fonts/google_fonts.dart';
 
 void main() => runApp(const MyApp());
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  String currentTheme = 'neon';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      currentTheme = prefs.getString('theme') ?? 'neon';
+    });
+  }
+
+  void changeTheme(String newTheme) {
+    setState(() {
+      currentTheme = newTheme;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,13 +46,23 @@ class MyApp extends StatelessWidget {
         textTheme: GoogleFonts.manropeTextTheme(),
         useMaterial3: true,
       ),
-      home: const MainScreen(),
+      home: MainScreen(
+        currentTheme: currentTheme,
+        onThemeChanged: changeTheme,
+      ),
     );
   }
 }
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final String currentTheme;
+  final Function(String) onThemeChanged;
+
+  const MainScreen({
+    super.key,
+    required this.currentTheme,
+    required this.onThemeChanged,
+  });
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -34,13 +70,17 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
-  final List<Widget> _pages = [const HomeTab(), const SettingsTab()];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
-      body: _pages[_currentIndex],
+      body: _currentIndex == 0
+          ? HomeTab(theme: widget.currentTheme)
+          : SettingsTab(
+              currentTheme: widget.currentTheme,
+              onThemeChanged: widget.onThemeChanged,
+            ),
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -70,7 +110,8 @@ class _MainScreenState extends State<MainScreen> {
 
 // --- ГЛАВНАЯ ---
 class HomeTab extends StatefulWidget {
-  const HomeTab({super.key});
+  final String theme;
+  const HomeTab({super.key, required this.theme});
 
   @override
   State<HomeTab> createState() => _HomeTabState();
@@ -81,16 +122,23 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   bool isLoading = false;
   String connectionState = 'DISCONNECTED';
-  
+
   String subscriptionUrl = "";
   List<V2RayURL> parsedServers = [];
   int currentServer = 0;
-  
+
   String trafficUsed = "—";
   String trafficTotal = "—";
   String expireDate = "—";
-  
-  String currentTheme = 'neon';
+
+  Map<String, Color> getThemeColors() {
+    switch (widget.theme) {
+      case 'autumn': return {'bg': const Color(0xFF120B07), 'accent': const Color(0xFFFF8A1F), 'accent2': const Color(0xFFC2391B)};
+      case 'ice': return {'bg': const Color(0xFF070C16), 'accent': const Color(0xFF34B6FF), 'accent2': const Color(0xFF3D5BFF)};
+      case 'hw': return {'bg': const Color(0xFF0D0814), 'accent': const Color(0xFFFF7A00), 'accent2': const Color(0xFF8B2CFF)};
+      default: return {'bg': const Color(0xFF0A0812), 'accent': const Color(0xFFFF2BD6), 'accent2': const Color(0xFF7B2CFF)};
+    }
+  }
 
   @override
   void initState() {
@@ -114,7 +162,6 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
       subscriptionUrl = prefs.getString('subscriptionUrl') ?? "";
-      currentTheme = prefs.getString('theme') ?? 'neon';
     });
     if (subscriptionUrl.isNotEmpty) {
       await _fetchSubscription();
@@ -126,7 +173,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     setState(() => isLoading = true);
     try {
       final response = await http.get(Uri.parse(subscriptionUrl));
-      
+
       final userInfo = response.headers['subscription-userinfo'];
       if (userInfo != null) {
         final parts = userInfo.split(';');
@@ -198,15 +245,6 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     }
   }
 
-  Map<String, Color> getThemeColors() {
-    switch (currentTheme) {
-      case 'autumn': return {'bg': const Color(0xFF120B07), 'accent': const Color(0xFFFF8A1F), 'accent2': const Color(0xFFC2391B)};
-      case 'ice': return {'bg': const Color(0xFF070C16), 'accent': const Color(0xFF34B6FF), 'accent2': const Color(0xFF3D5BFF)};
-      case 'hw': return {'bg': const Color(0xFF0D0814), 'accent': const Color(0xFFFF7A00), 'accent2': const Color(0xFF8B2CFF)};
-      default: return {'bg': const Color(0xFF0A0812), 'accent': const Color(0xFFFF2BD6), 'accent2': const Color(0xFF7B2CFF)};
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     bool isConnected = connectionState == 'CONNECTED';
@@ -214,7 +252,11 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
     return Container(
       decoration: BoxDecoration(
-        gradient: RadialGradient(center: const Alignment(-0.8, -0.8), radius: 1.8, colors: [colors['bg']!, colors['accent2']!.withValues(alpha: 0.4)]),
+        gradient: RadialGradient(
+          center: const Alignment(-0.8, -0.8),
+          radius: 1.8,
+          colors: [colors['bg']!, colors['accent2']!.withValues(alpha: 0.4)],
+        ),
       ),
       child: SafeArea(
         child: SingleChildScrollView(
@@ -240,7 +282,13 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                     children: [
                       ScaleTransition(
                         scale: Tween(begin: 0.9, end: 1.2).animate(_pulseController),
-                        child: Container(width: 200, height: 200, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.3), width: 2))),
+                        child: Container(
+                          width: 200, height: 200,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.3), width: 2),
+                          ),
+                        ),
                       ),
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
@@ -256,7 +304,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 30),
               Text(isConnected ? 'VPN Включен' : 'VPN Отключен', style: GoogleFonts.manrope(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
               const SizedBox(height: 30),
@@ -333,7 +381,14 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
 // --- НАСТРОЙКИ ---
 class SettingsTab extends StatefulWidget {
-  const SettingsTab({super.key});
+  final String currentTheme;
+  final Function(String) onThemeChanged;
+
+  const SettingsTab({
+    super.key,
+    required this.currentTheme,
+    required this.onThemeChanged,
+  });
 
   @override
   State<SettingsTab> createState() => _SettingsTabState();
@@ -341,8 +396,7 @@ class SettingsTab extends StatefulWidget {
 
 class _SettingsTabState extends State<SettingsTab> {
   final TextEditingController _linkController = TextEditingController();
-  String selectedProtocol = "VLESS";
-  String currentTheme = 'neon';
+  bool bypassRussia = true;
 
   @override
   void initState() {
@@ -354,17 +408,15 @@ class _SettingsTabState extends State<SettingsTab> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
       _linkController.text = prefs.getString('subscriptionUrl') ?? "";
-      selectedProtocol = prefs.getString('protocol') ?? "VLESS";
-      currentTheme = prefs.getString('theme') ?? 'neon';
+      bypassRussia = prefs.getBool('bypassRussia') ?? true;
     });
   }
 
   Future<void> _saveSettings() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('subscriptionUrl', _linkController.text.trim());
-    await prefs.setString('protocol', selectedProtocol);
-    await prefs.setString('theme', currentTheme);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сохранено! Перезайдите на Главную.')));
+    await prefs.setBool('bypassRussia', bypassRussia);
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сохранено!')));
   }
 
   @override
@@ -379,7 +431,7 @@ class _SettingsTabState extends State<SettingsTab> {
             children: [
               Text('Настройки', style: GoogleFonts.manrope(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
               const SizedBox(height: 30),
-              
+
               Text('Ссылка на подписку', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               TextField(
@@ -388,37 +440,38 @@ class _SettingsTabState extends State<SettingsTab> {
                 maxLines: 3,
                 decoration: InputDecoration(hintText: 'https://...', hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: Colors.white.withValues(alpha: 0.05), border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 30),
 
-              Text('Протокол', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
+              Text('Тема оформления', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
                 child: DropdownButton<String>(
-                  value: selectedProtocol, dropdownColor: const Color(0xFF1B1E21), style: const TextStyle(color: Colors.white), isExpanded: true, underline: const SizedBox(),
-                  items: const [DropdownMenuItem(value: 'VLESS', child: Text('VLESS')), DropdownMenuItem(value: 'VMess', child: Text('VMess')), DropdownMenuItem(value: 'Trojan', child: Text('Trojan'))],
-                  onChanged: (val) { if (val != null) setState(() => selectedProtocol = val); },
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              Text('Тема', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
-                child: DropdownButton<String>(
-                  value: currentTheme, dropdownColor: const Color(0xFF1B1E21), style: const TextStyle(color: Colors.white), isExpanded: true, underline: const SizedBox(),
+                  value: widget.currentTheme,
+                  dropdownColor: const Color(0xFF1B1E21),
+                  style: const TextStyle(color: Colors.white),
+                  isExpanded: true,
+                  underline: const SizedBox(),
                   items: const [
                     DropdownMenuItem(value: 'neon', child: Text('Неон')),
                     DropdownMenuItem(value: 'autumn', child: Text('Осень')),
                     DropdownMenuItem(value: 'ice', child: Text('Лёд')),
                     DropdownMenuItem(value: 'hw', child: Text('Хэллоуин')),
                   ],
-                  onChanged: (val) { if (val != null) setState(() => currentTheme = val); },
+                  onChanged: (val) async {
+                    if (val != null) {
+                      widget.onThemeChanged(val);
+                      SharedPreferences prefs = await SharedPreferences.getInstance();
+                      await prefs.setString('theme', val);
+                    }
+                  },
                 ),
               ),
+              const SizedBox(height: 20),
+
+              _buildSwitch('Обход РФ', 'Госуслуги и банки напрямую', bypassRussia, (v) => setState(() => bypassRussia = v)),
+
               const SizedBox(height: 40),
 
               ElevatedButton(
@@ -429,6 +482,25 @@ class _SettingsTabState extends State<SettingsTab> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSwitch(String title, String subtitle, bool value, Function(bool) onChanged) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+              Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ]),
+          ),
+          Switch(value: value, activeColor: const Color(0xFFFF2BD6), onChanged: onChanged),
+        ],
       ),
     );
   }
