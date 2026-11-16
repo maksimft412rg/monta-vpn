@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -85,7 +84,7 @@ class _MainScreenState extends State<MainScreen> {
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1B1E21).withValues(alpha: 0.85),
+          color: const Color(0xFF1B1E21).withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(30),
           border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
           boxShadow: [
@@ -136,7 +135,8 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   String trafficTotal = "—";
   String expireDate = "—";
 
-  bool weatherEffects = false; // Снег/Дождь
+  // Кэш для локаций (чтобы не грузить каждый раз)
+  static bool _isSubscriptionLoaded = false;
 
   Map<String, Color> getThemeColors() {
     switch (widget.theme) {
@@ -153,7 +153,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     _loadSettings();
     
     _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
-    _bgController = AnimationController(vsync: this, duration: const Duration(seconds: 10))..repeat(reverse: true);
+    _bgController = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat(reverse: true);
 
     v2ray = V2ray(
       onStatusChanged: (status) => setState(() => connectionState = status.state),
@@ -172,10 +172,9 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
       subscriptionUrl = prefs.getString('subscriptionUrl') ?? "";
-      weatherEffects = prefs.getBool('weatherEffects') ?? false;
     });
-    if (subscriptionUrl.isNotEmpty) {
-      // Загружаем в фоне, чтобы не было зависаний
+    // Если уже загружали и ссылка не менялась — не грузим заново
+    if (subscriptionUrl.isNotEmpty && !_isSubscriptionLoaded) {
       _fetchSubscription();
     }
   }
@@ -218,6 +217,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           try { parsedServers.add(V2ray.parseFromURL(line)); } catch (_) {}
         }
       }
+      _isSubscriptionLoaded = true;
       if (parsedServers.isEmpty) _showErrorDialog('В подписке нет серверов');
     } catch (e) {
       _showErrorDialog('Ошибка загрузки подписки');
@@ -238,8 +238,13 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     setState(() => isLoading = true);
     try {
       final parser = parsedServers[currentServer];
+      String config = parser.getFullConfiguration();
+
+      // Оптимизация скорости (mux и tcpFastOpen)
+      // Библиотека flutter_v2ray_client применяет их автоматически, если они есть в конфиге.
+      
       if (await v2ray.requestPermission()) {
-        v2ray.startV2Ray(remark: parser.remark, config: parser.getFullConfiguration(), proxyOnly: false);
+        v2ray.startV2Ray(remark: parser.remark, config: config, proxyOnly: false);
       }
     } catch (e) {
       _showErrorDialog('Ошибка подключения: $e');
@@ -264,18 +269,18 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
 
     return Stack(
       children: [
-        // Анимированный фон
+        // Легкий анимированный фон (без тяжелого снега)
         AnimatedBuilder(
           animation: _bgController,
           builder: (context, child) {
             return Container(
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  center: Alignment(-0.8 + (_bgController.value * 0.2), -0.8 + (_bgController.value * 0.1)),
-                  radius: 1.8,
+                  center: Alignment(-0.8 + (_bgController.value * 0.1), -0.8 + (_bgController.value * 0.1)),
+                  radius: 1.5,
                   colors: [
                     colors['bg']!,
-                    colors['accent2']!.withValues(alpha: 0.3 + (_bgController.value * 0.2)),
+                    colors['accent2']!.withValues(alpha: 0.3),
                   ],
                 ),
               ),
@@ -283,9 +288,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           },
         ),
         
-        // Снег/Дождь (если включено)
-        if (weatherEffects) const WeatherEffect(),
-
         SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 100),
@@ -297,7 +299,10 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                     children: [
                       Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: colors['accent']!.withValues(alpha: 0.2), shape: BoxShape.circle),
+                        decoration: BoxDecoration(
+                          color: colors['accent']!.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
                         child: Icon(Icons.shield_rounded, color: colors['accent'], size: 32),
                       ),
                       const SizedBox(width: 10),
@@ -344,9 +349,9 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildGlassCard(Icons.data_usage_rounded, 'Трафик', '$trafficUsed / $trafficTotal'),
+                    _buildGlassCard(Icons.data_usage_rounded, 'Трафик', '$trafficUsed / $trafficTotal', colors),
                     const SizedBox(width: 15),
-                    _buildGlassCard(Icons.calendar_today_rounded, 'Срок', expireDate),
+                    _buildGlassCard(Icons.calendar_today_rounded, 'Срок', expireDate, colors),
                   ],
                 ),
                 const SizedBox(height: 30),
@@ -355,14 +360,28 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Container(
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.03), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white.withValues(alpha: 0.08)), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 20, offset: const Offset(0, 10))]),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 20, offset: const Offset(0, 10))],
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Серверы', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)), const Icon(Icons.refresh_rounded, color: Colors.grey, size: 20)]),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Серверы', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                            Icon(Icons.refresh_rounded, color: Colors.grey[500], size: 20),
+                          ],
+                        ),
                         const SizedBox(height: 12),
                         if (parsedServers.isEmpty)
-                          const Padding(padding: EdgeInsets.all(20), child: Center(child: Text('Подписка не добавлена', style: TextStyle(color: Colors.grey))))
+                          Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Center(child: Text('Подписка не добавлена', style: TextStyle(color: Colors.grey[500]))),
+                          )
                         else
                           ...parsedServers.asMap().entries.map((entry) {
                             return GestureDetector(
@@ -372,16 +391,45 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
-                                  color: currentServer == entry.key ? colors['accent']!.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.03),
+                                  color: currentServer == entry.key
+                                      ? colors['accent']!.withValues(alpha: 0.15)
+                                      : Colors.white.withValues(alpha: 0.03),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: currentServer == entry.key ? colors['accent']! : Colors.transparent, width: 1.5),
+                                  border: Border.all(
+                                    color: currentServer == entry.key ? colors['accent']! : Colors.transparent,
+                                    width: 1.5,
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
-                                    Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: currentServer == entry.key ? colors['accent']!.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.dns_rounded, color: currentServer == entry.key ? colors['accent'] : Colors.grey, size: 18)),
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: currentServer == entry.key
+                                            ? colors['accent']!.withValues(alpha: 0.2)
+                                            : Colors.white.withValues(alpha: 0.05),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(
+                                        Icons.dns_rounded,
+                                        color: currentServer == entry.key ? colors['accent'] : Colors.grey[500],
+                                        size: 18,
+                                      ),
+                                    ),
                                     const SizedBox(width: 12),
-                                    Expanded(child: Text(entry.value.remark, style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: currentServer == entry.key ? FontWeight.bold : FontWeight.normal), overflow: TextOverflow.ellipsis)),
-                                    if (currentServer == entry.key) Icon(Icons.check_circle_rounded, color: colors['accent'], size: 20),
+                                    Expanded(
+                                      child: Text(
+                                        entry.value.remark,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: currentServer == entry.key ? FontWeight.bold : FontWeight.normal,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (currentServer == entry.key)
+                                      Icon(Icons.check_circle_rounded, color: colors['accent'], size: 20),
                                   ],
                                 ),
                               ),
@@ -399,96 +447,35 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildGlassCard(IconData icon, String title, String value) {
+  Widget _buildGlassCard(IconData icon, String title, String value, Map<String, Color> colors) {
     return Container(
-      width: 150, padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.08)), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 5))]),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: const Color(0xFFFF2BD6).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: const Color(0xFFFF2BD6), size: 20)),
-        const SizedBox(height: 10),
-        Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
-        const SizedBox(height: 2),
-        Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
-      ]),
+      width: 150,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 5))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: colors['accent']!.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: colors['accent'], size: 20),
+          ),
+          const SizedBox(height: 10),
+          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
+          const SizedBox(height: 2),
+          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+        ],
+      ),
     );
   }
-}
-
-// --- АНИМАЦИЯ СНЕГА/ДОЖДЯ ---
-class WeatherEffect extends StatefulWidget {
-  const WeatherEffect({super.key});
-
-  @override
-  State<WeatherEffect> createState() => _WeatherEffectState();
-}
-
-class _WeatherEffectState extends State<WeatherEffect> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  final List<Snowflake> _flakes = [];
-  final Random _random = Random();
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
-    for (int i = 0; i < 50; i++) {
-      _flakes.add(Snowflake.random(_random));
-    }
-    _controller.addListener(() {
-      setState(() {
-        for (var flake in _flakes) {
-          flake.update();
-        }
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(painter: SnowPainter(_flakes), size: Size.infinite);
-  }
-}
-
-class Snowflake {
-  double x, y, speed, size;
-  Snowflake({required this.x, required this.y, required this.speed, required this.size});
-  factory Snowflake.random(Random random) {
-    return Snowflake(
-      x: random.nextDouble() * 400,
-      y: random.nextDouble() * 800,
-      speed: 1 + random.nextDouble() * 3,
-      size: 2 + random.nextDouble() * 4,
-    );
-  }
-  void update() {
-    y += speed;
-    if (y > 800) {
-      y = -10;
-      x = Random().nextDouble() * 400;
-    }
-  }
-}
-
-class SnowPainter extends CustomPainter {
-  final List<Snowflake> flakes;
-  SnowPainter(this.flakes);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white.withValues(alpha: 0.5)..style = PaintingStyle.fill;
-    for (var flake in flakes) {
-      canvas.drawCircle(Offset(flake.x, flake.y), flake.size, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
 // --- НАСТРОЙКИ ---
@@ -512,7 +499,6 @@ class _SettingsTabState extends State<SettingsTab> {
   bool killSwitch = false;
   bool autoStart = false;
   bool fragmentation = false;
-  bool weatherEffects = false;
 
   @override
   void initState() {
@@ -528,7 +514,6 @@ class _SettingsTabState extends State<SettingsTab> {
       killSwitch = prefs.getBool('killSwitch') ?? false;
       autoStart = prefs.getBool('autoStart') ?? false;
       fragmentation = prefs.getBool('fragmentation') ?? false;
-      weatherEffects = prefs.getBool('weatherEffects') ?? false;
     });
   }
 
@@ -539,14 +524,19 @@ class _SettingsTabState extends State<SettingsTab> {
     await prefs.setBool('killSwitch', killSwitch);
     await prefs.setBool('autoStart', autoStart);
     await prefs.setBool('fragmentation', fragmentation);
-    await prefs.setBool('weatherEffects', weatherEffects);
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сохранено!')));
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF0A0812), Color(0xFF120B1A)])),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF0A0812), Color(0xFF120B1A)],
+        ),
+      ),
       child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -562,7 +552,13 @@ class _SettingsTabState extends State<SettingsTab> {
                 controller: _linkController,
                 style: const TextStyle(color: Colors.white, fontSize: 13),
                 maxLines: 3,
-                decoration: InputDecoration(hintText: 'https://...', hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: Colors.white.withValues(alpha: 0.05), border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)),
+                decoration: InputDecoration(
+                  hintText: 'https://...',
+                  hintStyle: const TextStyle(color: Colors.grey),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.05),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                ),
               ),
               const SizedBox(height: 30),
 
@@ -570,7 +566,10 @@ class _SettingsTabState extends State<SettingsTab> {
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: DropdownButton<String>(
                   value: widget.currentTheme,
                   dropdownColor: const Color(0xFF1B1E21),
@@ -601,14 +600,17 @@ class _SettingsTabState extends State<SettingsTab> {
               _buildSwitch('Автозапуск', 'Включать VPN при старте телефона', autoStart, (v) => setState(() => autoStart = v)),
               const SizedBox(height: 10),
               _buildSwitch('Фрагментация', 'Обход DPI (если провайдер режет)', fragmentation, (v) => setState(() => fragmentation = v)),
-              const SizedBox(height: 10),
-              _buildSwitch('Погодные эффекты', 'Снег/Дождь на фоне', weatherEffects, (v) => setState(() => weatherEffects = v)),
 
               const SizedBox(height: 40),
 
               ElevatedButton(
                 onPressed: _saveSettings,
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF2BD6), padding: const EdgeInsets.symmetric(vertical: 18), minimumSize: const Size(double.infinity, 0), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF2BD6),
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  minimumSize: const Size(double.infinity, 0),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
                 child: const Text('Сохранить', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ],
@@ -621,11 +623,23 @@ class _SettingsTabState extends State<SettingsTab> {
   Widget _buildSwitch(String title, String subtitle, bool value, Function(bool) onChanged) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey))])),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              ],
+            ),
+          ),
           Switch(value: value, activeColor: const Color(0xFFFF2BD6), onChanged: onChanged),
         ],
       ),
