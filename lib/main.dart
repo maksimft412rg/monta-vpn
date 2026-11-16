@@ -45,6 +45,7 @@ class _MyAppState extends State<MyApp> {
         brightness: Brightness.dark,
         textTheme: GoogleFonts.manropeTextTheme(),
         useMaterial3: true,
+        scaffoldBackgroundColor: Colors.transparent,
       ),
       home: MainScreen(
         currentTheme: currentTheme,
@@ -84,9 +85,12 @@ class _MainScreenState extends State<MainScreen> {
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1B1E21).withValues(alpha: 0.9),
+          color: const Color(0xFF1B1E21).withValues(alpha: 0.85),
           borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: Colors.white12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 20, offset: const Offset(0, 10)),
+          ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(30),
@@ -98,8 +102,8 @@ class _MainScreenState extends State<MainScreen> {
             selectedItemColor: const Color(0xFFFF2BD6),
             unselectedItemColor: Colors.grey,
             items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Главная'),
-              BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Настройки'),
+              BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Главная'),
+              BottomNavigationBarItem(icon: Icon(Icons.settings_rounded), label: 'Настройки'),
             ],
           ),
         ),
@@ -117,9 +121,10 @@ class HomeTab extends StatefulWidget {
   State<HomeTab> createState() => _HomeTabState();
 }
 
-class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
+class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   late final V2ray v2ray;
   late AnimationController _pulseController;
+  late AnimationController _bgController;
   bool isLoading = false;
   String connectionState = 'DISCONNECTED';
 
@@ -144,7 +149,12 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   void initState() {
     super.initState();
     _loadSettings();
+    
+    // Анимация пульсации
     _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
+    
+    // Анимация фона (плавное переливание)
+    _bgController = AnimationController(vsync: this, duration: const Duration(seconds: 10))..repeat(reverse: true);
 
     v2ray = V2ray(
       onStatusChanged: (status) => setState(() => connectionState = status.state),
@@ -155,6 +165,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   @override
   void dispose() {
     _pulseController.dispose();
+    _bgController.dispose();
     super.dispose();
   }
 
@@ -250,55 +261,120 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     bool isConnected = connectionState == 'CONNECTED';
     final colors = getThemeColors();
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: const Alignment(-0.8, -0.8),
-          radius: 1.8,
-          colors: [colors['bg']!, colors['accent2']!.withValues(alpha: 0.4)],
-        ),
-      ),
+    return AnimatedBuilder(
+      animation: _bgController,
+      builder: (context, child) {
+        return Container(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment(
+                -0.8 + (_bgController.value * 0.2),
+                -0.8 + (_bgController.value * 0.1),
+              ),
+              radius: 1.8,
+              colors: [
+                colors['bg']!,
+                colors['accent2']!.withValues(alpha: 0.3 + (_bgController.value * 0.2)),
+              ],
+            ),
+          ),
+          child: child,
+        );
+      },
       child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 100),
           child: Column(
             children: [
+              // Шапка
               Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: Row(
                   children: [
-                    Icon(Icons.shield, color: colors['accent'], size: 40),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: colors['accent']!.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.shield_rounded, color: colors['accent'], size: 32),
+                    ),
                     const SizedBox(width: 10),
-                    Text('Monta VPN', style: GoogleFonts.manrope(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
+                    Text(
+                      'Monta VPN',
+                      style: GoogleFonts.manrope(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: 1,
+                      ),
+                    ),
                   ],
                 ),
               ),
 
+              // Кнопка с двойной пульсацией
               Center(
                 child: GestureDetector(
                   onTap: isLoading ? null : toggleVPN,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
+                      // Внешнее кольцо
                       ScaleTransition(
-                        scale: Tween(begin: 0.9, end: 1.2).animate(_pulseController),
+                        scale: Tween(begin: 1.0, end: 1.3).animate(_pulseController),
                         child: Container(
-                          width: 200, height: 200,
+                          width: 220,
+                          height: 220,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.3), width: 2),
+                            border: Border.all(
+                              color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.1),
+                              width: 1,
+                            ),
                           ),
                         ),
                       ),
+                      // Внутреннее кольцо
+                      ScaleTransition(
+                        scale: Tween(begin: 0.9, end: 1.15).animate(_pulseController),
+                        child: Container(
+                          width: 190,
+                          height: 190,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.3),
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Основная кнопка
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
-                        width: 160, height: 160,
+                        width: 160,
+                        height: 160,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: LinearGradient(colors: isConnected ? [Colors.green, Colors.greenAccent] : [colors['accent']!, colors['accent2']!]),
-                          boxShadow: [BoxShadow(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.7), blurRadius: 60, spreadRadius: 10)],
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: isConnected
+                                ? [Colors.green, Colors.greenAccent]
+                                : [colors['accent']!, colors['accent2']!],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.6),
+                              blurRadius: 60,
+                              spreadRadius: 10,
+                            ),
+                          ],
                         ),
-                        child: isLoading ? const Center(child: CircularProgressIndicator(color: Colors.white)) : const Icon(Icons.power_settings_new, size: 70, color: Colors.white),
+                        child: isLoading
+                            ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                            : const Icon(Icons.power_settings_new_rounded, size: 70, color: Colors.white),
                       ),
                     ],
                   ),
@@ -306,48 +382,115 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
               ),
 
               const SizedBox(height: 30),
-              Text(isConnected ? 'VPN Включен' : 'VPN Отключен', style: GoogleFonts.manrope(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
+              Text(
+                isConnected ? 'VPN Включен' : 'VPN Отключен',
+                style: GoogleFonts.manrope(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                isConnected ? 'Ваш трафик защищен' : 'Нажмите для подключения',
+                style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+              ),
               const SizedBox(height: 30),
 
+              // Карточки (стекло)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildInfoCard(Icons.data_usage, 'Трафик', '$trafficUsed / $trafficTotal'),
+                  _buildGlassCard(Icons.data_usage_rounded, 'Трафик', '$trafficUsed / $trafficTotal'),
                   const SizedBox(width: 15),
-                  _buildInfoCard(Icons.calendar_today, 'Срок', expireDate),
+                  _buildGlassCard(Icons.calendar_today_rounded, 'Срок', expireDate),
                 ],
               ),
               const SizedBox(height: 30),
 
+              // Серверы
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.03),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Серверы', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Серверы', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                          Icon(Icons.refresh_rounded, color: Colors.grey[500], size: 20),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
                       if (parsedServers.isEmpty)
-                        const Padding(padding: EdgeInsets.all(20), child: Text('Подписка не добавлена', style: TextStyle(color: Colors.grey)))
+                        Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Center(
+                            child: Text('Подписка не добавлена', style: TextStyle(color: Colors.grey[500])),
+                          ),
+                        )
                       else
                         ...parsedServers.asMap().entries.map((entry) {
                           return GestureDetector(
                             onTap: () => setState(() => currentServer = entry.key),
-                            child: Container(
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
                               margin: const EdgeInsets.only(bottom: 8),
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
-                                color: currentServer == entry.key ? colors['accent']!.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.03),
+                                color: currentServer == entry.key
+                                    ? colors['accent']!.withValues(alpha: 0.15)
+                                    : Colors.white.withValues(alpha: 0.03),
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: currentServer == entry.key ? colors['accent']! : Colors.transparent),
+                                border: Border.all(
+                                  color: currentServer == entry.key ? colors['accent']! : Colors.transparent,
+                                  width: 1.5,
+                                ),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.dns, color: Colors.grey, size: 20),
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: currentServer == entry.key
+                                          ? colors['accent']!.withValues(alpha: 0.2)
+                                          : Colors.white.withValues(alpha: 0.05),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.dns_rounded,
+                                      color: currentServer == entry.key ? colors['accent'] : Colors.grey[500],
+                                      size: 18,
+                                    ),
+                                  ),
                                   const SizedBox(width: 12),
-                                  Expanded(child: Text(entry.value.remark, style: const TextStyle(color: Colors.white, fontSize: 14), overflow: TextOverflow.ellipsis)),
+                                  Expanded(
+                                    child: Text(
+                                      entry.value.remark,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: currentServer == entry.key ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (currentServer == entry.key)
+                                    Icon(Icons.check_circle_rounded, color: colors['accent'], size: 20),
                                 ],
                               ),
                             ),
@@ -364,17 +507,42 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     );
   }
 
-  Widget _buildInfoCard(IconData icon, String title, String value) {
+  Widget _buildGlassCard(IconData icon, String title, String value) {
     return Container(
-      width: 150, padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: const Color(0xFFFF2BD6), size: 24),
-        const SizedBox(height: 10),
-        Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        const SizedBox(height: 2),
-        Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-      ]),
+      width: 150,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF2BD6).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: const Color(0xFFFF2BD6), size: 20),
+          ),
+          const SizedBox(height: 10),
+          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -397,6 +565,9 @@ class SettingsTab extends StatefulWidget {
 class _SettingsTabState extends State<SettingsTab> {
   final TextEditingController _linkController = TextEditingController();
   bool bypassRussia = true;
+  bool killSwitch = false;
+  bool autoStart = false;
+  bool fragmentation = false;
 
   @override
   void initState() {
@@ -409,6 +580,9 @@ class _SettingsTabState extends State<SettingsTab> {
     setState(() {
       _linkController.text = prefs.getString('subscriptionUrl') ?? "";
       bypassRussia = prefs.getBool('bypassRussia') ?? true;
+      killSwitch = prefs.getBool('killSwitch') ?? false;
+      autoStart = prefs.getBool('autoStart') ?? false;
+      fragmentation = prefs.getBool('fragmentation') ?? false;
     });
   }
 
@@ -416,13 +590,24 @@ class _SettingsTabState extends State<SettingsTab> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('subscriptionUrl', _linkController.text.trim());
     await prefs.setBool('bypassRussia', bypassRussia);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сохранено!')));
+    await prefs.setBool('killSwitch', killSwitch);
+    await prefs.setBool('autoStart', autoStart);
+    await prefs.setBool('fragmentation', fragmentation);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Сохранено!')),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF0A0812), Color(0xFF120B1A)])),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF0A0812), Color(0xFF120B1A)],
+        ),
+      ),
       child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -438,7 +623,13 @@ class _SettingsTabState extends State<SettingsTab> {
                 controller: _linkController,
                 style: const TextStyle(color: Colors.white, fontSize: 13),
                 maxLines: 3,
-                decoration: InputDecoration(hintText: 'https://...', hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: Colors.white.withValues(alpha: 0.05), border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)),
+                decoration: InputDecoration(
+                  hintText: 'https://...',
+                  hintStyle: const TextStyle(color: Colors.grey),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.05),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                ),
               ),
               const SizedBox(height: 30),
 
@@ -446,7 +637,10 @@ class _SettingsTabState extends State<SettingsTab> {
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: DropdownButton<String>(
                   value: widget.currentTheme,
                   dropdownColor: const Color(0xFF1B1E21),
@@ -471,12 +665,23 @@ class _SettingsTabState extends State<SettingsTab> {
               const SizedBox(height: 20),
 
               _buildSwitch('Обход РФ', 'Госуслуги и банки напрямую', bypassRussia, (v) => setState(() => bypassRussia = v)),
+              const SizedBox(height: 10),
+              _buildSwitch('Kill Switch', 'Блокировать интернет при обрыве VPN', killSwitch, (v) => setState(() => killSwitch = v)),
+              const SizedBox(height: 10),
+              _buildSwitch('Автозапуск', 'Включать VPN при старте телефона', autoStart, (v) => setState(() => autoStart = v)),
+              const SizedBox(height: 10),
+              _buildSwitch('Фрагментация', 'Обход DPI (если провайдер режет)', fragmentation, (v) => setState(() => fragmentation = v)),
 
               const SizedBox(height: 40),
 
               ElevatedButton(
                 onPressed: _saveSettings,
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF2BD6), padding: const EdgeInsets.symmetric(vertical: 18), minimumSize: const Size(double.infinity, 0), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF2BD6),
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  minimumSize: const Size(double.infinity, 0),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
                 child: const Text('Сохранить', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ],
@@ -489,15 +694,22 @@ class _SettingsTabState extends State<SettingsTab> {
   Widget _buildSwitch(String title, String subtitle, bool value, Function(bool) onChanged) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-              Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            ]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              ],
+            ),
           ),
           Switch(value: value, activeColor: const Color(0xFFFF2BD6), onChanged: onChanged),
         ],
