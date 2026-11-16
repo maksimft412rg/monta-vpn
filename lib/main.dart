@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 
 void main() => runApp(const MyApp());
@@ -45,9 +47,6 @@ class _MainScreenState extends State<MainScreen> {
           color: const Color(0xFF1B1E21).withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(30),
           border: Border.all(color: Colors.white12),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 20, offset: const Offset(0, 10)),
-          ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(30),
@@ -82,34 +81,27 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   bool isLoading = false;
   String connectionState = 'DISCONNECTED';
-  String configLink = "";
   
-  final List<Map<String, String>> servers = [
-    {"name": "🇳🇱 Нидерланды · TCP", "protocol": "VLESS"},
-    {"name": "🇷🇺 Россия · TCP", "protocol": "VLESS"},
-    {"name": "🇹🇷 Турция · XHTTP", "protocol": "VLESS"},
-    {"name": "🇵🇱 Польша · gRPC", "protocol": "VLESS"},
-  ];
+  String subscriptionUrl = "";
+  List<V2RayURL> parsedServers = [];
   int currentServer = 0;
+  
+  String trafficUsed = "—";
+  String trafficTotal = "—";
+  String expireDate = "—";
+  
+  String currentTheme = 'neon';
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
+    _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
 
     v2ray = V2ray(
-      onStatusChanged: (status) {
-        setState(() => connectionState = status.state);
-      },
+      onStatusChanged: (status) => setState(() => connectionState = status.state),
     );
-    v2ray.initialize(
-      notificationIconResourceType: "mipmap",
-      notificationIconResourceName: "ic_launcher",
-    );
+    v2ray.initialize(notificationIconResourceType: "mipmap", notificationIconResourceName: "ic_launcher");
   }
 
   @override
@@ -121,8 +113,58 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   Future<void> _loadSettings() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
-      configLink = prefs.getString('configLink') ?? "vless://5ddb9ba9-79b9-4dc4-83e4-f4767963c229@0988b3t.nl18.h1clayd.click:443?type=tcp&security=reality&sni=0988b3t.nl18.h1clayd.click&fp=firefox&pbk=U0rnaVzuOd8A5Xt09wyYR9on1a5GLa7yo-O9hLsNI1I&sid=240f9135b8ebc770&spx=%2F&encryption=none#MONTA";
+      subscriptionUrl = prefs.getString('subscriptionUrl') ?? "";
+      currentTheme = prefs.getString('theme') ?? 'neon';
     });
+    if (subscriptionUrl.isNotEmpty) {
+      await _fetchSubscription();
+    }
+  }
+
+  Future<void> _fetchSubscription() async {
+    if (subscriptionUrl.isEmpty) return;
+    setState(() => isLoading = true);
+    try {
+      final response = await http.get(Uri.parse(subscriptionUrl));
+      
+      final userInfo = response.headers['subscription-userinfo'];
+      if (userInfo != null) {
+        final parts = userInfo.split(';');
+        int upload = 0, download = 0, total = 0, expire = 0;
+        for (var part in parts) {
+          final kv = part.trim().split('=');
+          if (kv.length == 2) {
+            switch (kv[0]) {
+              case 'upload': upload = int.tryParse(kv[1]) ?? 0; break;
+              case 'download': download = int.tryParse(kv[1]) ?? 0; break;
+              case 'total': total = int.tryParse(kv[1]) ?? 0; break;
+              case 'expire': expire = int.tryParse(kv[1]) ?? 0; break;
+            }
+          }
+        }
+        trafficUsed = "${((upload + download) / (1024 * 1024 * 1024)).toStringAsFixed(2)} ГБ";
+        trafficTotal = "${(total / (1024 * 1024 * 1024)).toStringAsFixed(1)} ГБ";
+        if (expire > 0) expireDate = DateTime.fromMillisecondsSinceEpoch(expire * 1000).toString().split(' ')[0];
+      }
+
+      final content = response.body.trim();
+      String decodedContent = content;
+      try { decodedContent = utf8.decode(base64.decode(content)); } catch (_) {}
+
+      final lines = decodedContent.split('\n');
+      parsedServers.clear();
+      for (var line in lines) {
+        line = line.trim();
+        if (line.startsWith('vless://') || line.startsWith('vmess://') || line.startsWith('trojan://')) {
+          try { parsedServers.add(V2ray.parseFromURL(line)); } catch (_) {}
+        }
+      }
+      if (parsedServers.isEmpty) _showErrorDialog('В подписке нет серверов');
+    } catch (e) {
+      _showErrorDialog('Ошибка загрузки подписки');
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
   }
 
   void toggleVPN() async {
@@ -130,13 +172,13 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
       v2ray.stopV2Ray();
       return;
     }
-    if (configLink.isEmpty) {
-      _showErrorDialog('Вставьте ссылку в Настройках!');
+    if (parsedServers.isEmpty) {
+      _showErrorDialog('Подписка не добавлена или пуста. Зайдите в Настройки.');
       return;
     }
     setState(() => isLoading = true);
     try {
-      V2RayURL parser = V2ray.parseFromURL(configLink);
+      final parser = parsedServers[currentServer];
       if (await v2ray.requestPermission()) {
         v2ray.startV2Ray(remark: parser.remark, config: parser.getFullConfiguration(), proxyOnly: false);
       }
@@ -149,28 +191,30 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
   void _showErrorDialog(String message) {
     if (mounted) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Ошибка'),
-          content: Text(message),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ОК'))],
-        ),
-      );
+      showDialog(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('Ошибка'), content: Text(message),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ОК'))],
+      ));
+    }
+  }
+
+  Map<String, Color> getThemeColors() {
+    switch (currentTheme) {
+      case 'autumn': return {'bg': const Color(0xFF120B07), 'accent': const Color(0xFFFF8A1F), 'accent2': const Color(0xFFC2391B)};
+      case 'ice': return {'bg': const Color(0xFF070C16), 'accent': const Color(0xFF34B6FF), 'accent2': const Color(0xFF3D5BFF)};
+      case 'hw': return {'bg': const Color(0xFF0D0814), 'accent': const Color(0xFFFF7A00), 'accent2': const Color(0xFF8B2CFF)};
+      default: return {'bg': const Color(0xFF0A0812), 'accent': const Color(0xFFFF2BD6), 'accent2': const Color(0xFF7B2CFF)};
     }
   }
 
   @override
   Widget build(BuildContext context) {
     bool isConnected = connectionState == 'CONNECTED';
+    final colors = getThemeColors();
 
     return Container(
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(-0.8, -0.8),
-          radius: 1.8,
-          colors: [Color(0xFF0A0812), Color(0xFF2A1050)],
-        ),
+      decoration: BoxDecoration(
+        gradient: RadialGradient(center: const Alignment(-0.8, -0.8), radius: 1.8, colors: [colors['bg']!, colors['accent2']!.withValues(alpha: 0.4)]),
       ),
       child: SafeArea(
         child: SingleChildScrollView(
@@ -181,63 +225,32 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                 padding: const EdgeInsets.all(20.0),
                 child: Row(
                   children: [
-                    const Icon(Icons.shield, color: Color(0xFFFF2BD6), size: 40),
+                    Icon(Icons.shield, color: colors['accent'], size: 40),
                     const SizedBox(width: 10),
-                    const Text(
-                      'Monta VPN',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 1),
-                    ),
+                    Text('Monta VPN', style: GoogleFonts.manrope(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
                   ],
                 ),
               ),
 
-              // Кнопка с пульсацией
               Center(
                 child: GestureDetector(
                   onTap: isLoading ? null : toggleVPN,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      // Пульсирующее кольцо
                       ScaleTransition(
                         scale: Tween(begin: 0.9, end: 1.2).animate(_pulseController),
-                        child: Container(
-                          width: 200,
-                          height: 200,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: (isConnected ? Colors.green : const Color(0xFFFF2BD6)).withValues(alpha: 0.3),
-                              width: 2,
-                            ),
-                          ),
-                        ),
+                        child: Container(width: 200, height: 200, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.3), width: 2))),
                       ),
-                      // Основная кнопка
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
-                        width: 160,
-                        height: 160,
+                        width: 160, height: 160,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: isConnected
-                                ? [Colors.green, Colors.greenAccent]
-                                : [const Color(0xFFFF2BD6), const Color(0xFF7B2CFF)],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (isConnected ? Colors.green : const Color(0xFFFF2BD6)).withValues(alpha: 0.7),
-                              blurRadius: 60,
-                              spreadRadius: 10,
-                            ),
-                          ],
+                          gradient: LinearGradient(colors: isConnected ? [Colors.green, Colors.greenAccent] : [colors['accent']!, colors['accent2']!]),
+                          boxShadow: [BoxShadow(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.7), blurRadius: 60, spreadRadius: 10)],
                         ),
-                        child: isLoading
-                            ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                            : const Icon(Icons.power_settings_new, size: 70, color: Colors.white),
+                        child: isLoading ? const Center(child: CircularProgressIndicator(color: Colors.white)) : const Icon(Icons.power_settings_new, size: 70, color: Colors.white),
                       ),
                     ],
                   ),
@@ -245,96 +258,53 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
               ),
               
               const SizedBox(height: 30),
-              Text(
-                isConnected ? 'VPN Включен' : 'VPN Отключен',
-                style: GoogleFonts.manrope(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                isConnected ? 'Трафик зашифрован' : 'Нажмите кнопку для подключения',
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
-              ),
+              Text(isConnected ? 'VPN Включен' : 'VPN Отключен', style: GoogleFonts.manrope(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
               const SizedBox(height: 30),
 
-              // Карточки
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildInfoCard(Icons.download, 'Трафик', '0.00 ГБ'),
+                  _buildInfoCard(Icons.data_usage, 'Трафик', '$trafficUsed / $trafficTotal'),
                   const SizedBox(width: 15),
-                  _buildInfoCard(Icons.speed, 'Пинг', '— мс'),
+                  _buildInfoCard(Icons.calendar_today, 'Срок', expireDate),
                 ],
               ),
               const SizedBox(height: 30),
 
-              // Серверы
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.04),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                  ),
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Серверы', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                          const Icon(Icons.refresh, color: Colors.grey, size: 20),
-                        ],
-                      ),
+                      Text('Серверы', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                       const SizedBox(height: 10),
-                      ...servers.asMap().entries.map((entry) {
-                        return GestureDetector(
-                          onTap: () => setState(() => currentServer = entry.key),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: currentServer == entry.key
-                                  ? const Color(0xFFFF2BD6).withValues(alpha: 0.15)
-                                  : Colors.white.withValues(alpha: 0.03),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: currentServer == entry.key ? const Color(0xFFFF2BD6) : Colors.transparent,
+                      if (parsedServers.isEmpty)
+                        const Padding(padding: EdgeInsets.all(20), child: Text('Подписка не добавлена', style: TextStyle(color: Colors.grey)))
+                      else
+                        ...parsedServers.asMap().entries.map((entry) {
+                          return GestureDetector(
+                            onTap: () => setState(() => currentServer = entry.key),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: currentServer == entry.key ? colors['accent']!.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.03),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: currentServer == entry.key ? colors['accent']! : Colors.transparent),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.dns, color: Colors.grey, size: 20),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: Text(entry.value.remark, style: const TextStyle(color: Colors.white, fontSize: 14), overflow: TextOverflow.ellipsis)),
+                                ],
                               ),
                             ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: const Icon(Icons.dns, color: Colors.grey, size: 20),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(entry.value["name"]!, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
-                                const Spacer(),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(entry.value["protocol"]!, style: const TextStyle(color: Colors.grey, fontSize: 10)),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
+                          );
+                        }),
                     ],
                   ),
                 ),
@@ -348,23 +318,15 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
   Widget _buildInfoCard(IconData icon, String title, String value) {
     return Container(
-      width: 150,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: const Color(0xFFFF2BD6), size: 24),
-          const SizedBox(height: 10),
-          Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-        ],
-      ),
+      width: 150, padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: const Color(0xFFFF2BD6), size: 24),
+        const SizedBox(height: 10),
+        Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 2),
+        Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+      ]),
     );
   }
 }
@@ -380,6 +342,7 @@ class SettingsTab extends StatefulWidget {
 class _SettingsTabState extends State<SettingsTab> {
   final TextEditingController _linkController = TextEditingController();
   String selectedProtocol = "VLESS";
+  String currentTheme = 'neon';
 
   @override
   void initState() {
@@ -390,30 +353,24 @@ class _SettingsTabState extends State<SettingsTab> {
   Future<void> _loadSettings() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
-      _linkController.text = prefs.getString('configLink') ?? "";
+      _linkController.text = prefs.getString('subscriptionUrl') ?? "";
       selectedProtocol = prefs.getString('protocol') ?? "VLESS";
+      currentTheme = prefs.getString('theme') ?? 'neon';
     });
   }
 
   Future<void> _saveSettings() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setString('configLink', _linkController.text.trim());
+    await prefs.setString('subscriptionUrl', _linkController.text.trim());
     await prefs.setString('protocol', selectedProtocol);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Сохранено!')),
-    );
+    await prefs.setString('theme', currentTheme);
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сохранено! Перезайдите на Главную.')));
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF0A0812), Color(0xFF120B1A)],
-        ),
-      ),
+      decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF0A0812), Color(0xFF120B1A)])),
       child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -422,20 +379,14 @@ class _SettingsTabState extends State<SettingsTab> {
             children: [
               Text('Настройки', style: GoogleFonts.manrope(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
               const SizedBox(height: 30),
-
-              Text('Ссылка подписки', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
+              
+              Text('Ссылка на подписку', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               TextField(
                 controller: _linkController,
                 style: const TextStyle(color: Colors.white, fontSize: 13),
                 maxLines: 3,
-                decoration: InputDecoration(
-                  hintText: 'vless:// / vmess:// / trojan://',
-                  hintStyle: const TextStyle(color: Colors.grey),
-                  filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.05),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                ),
+                decoration: InputDecoration(hintText: 'https://...', hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: Colors.white.withValues(alpha: 0.05), border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)),
               ),
               const SizedBox(height: 20),
 
@@ -443,37 +394,37 @@ class _SettingsTabState extends State<SettingsTab> {
               const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
                 child: DropdownButton<String>(
-                  value: selectedProtocol,
-                  dropdownColor: const Color(0xFF1B1E21),
-                  style: const TextStyle(color: Colors.white),
-                  isExpanded: true,
-                  underline: const SizedBox(),
+                  value: selectedProtocol, dropdownColor: const Color(0xFF1B1E21), style: const TextStyle(color: Colors.white), isExpanded: true, underline: const SizedBox(),
+                  items: const [DropdownMenuItem(value: 'VLESS', child: Text('VLESS')), DropdownMenuItem(value: 'VMess', child: Text('VMess')), DropdownMenuItem(value: 'Trojan', child: Text('Trojan'))],
+                  onChanged: (val) { if (val != null) setState(() => selectedProtocol = val); },
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              Text('Тема', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
+                child: DropdownButton<String>(
+                  value: currentTheme, dropdownColor: const Color(0xFF1B1E21), style: const TextStyle(color: Colors.white), isExpanded: true, underline: const SizedBox(),
                   items: const [
-                    DropdownMenuItem(value: 'VLESS', child: Text('VLESS')),
-                    DropdownMenuItem(value: 'VMess', child: Text('VMess')),
-                    DropdownMenuItem(value: 'Trojan', child: Text('Trojan')),
+                    DropdownMenuItem(value: 'neon', child: Text('Неон')),
+                    DropdownMenuItem(value: 'autumn', child: Text('Осень')),
+                    DropdownMenuItem(value: 'ice', child: Text('Лёд')),
+                    DropdownMenuItem(value: 'hw', child: Text('Хэллоуин')),
                   ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => selectedProtocol = val);
-                  },
+                  onChanged: (val) { if (val != null) setState(() => currentTheme = val); },
                 ),
               ),
               const SizedBox(height: 40),
 
               ElevatedButton(
                 onPressed: _saveSettings,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF2BD6),
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  minimumSize: const Size(double.infinity, 0),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                ),
-                child: const Text('Сохранить настройки', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF2BD6), padding: const EdgeInsets.symmetric(vertical: 18), minimumSize: const Size(double.infinity, 0), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                child: const Text('Сохранить', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
