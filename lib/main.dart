@@ -27,6 +27,7 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _loadSettings() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       currentTheme = prefs.getString('theme') ?? 'neon';
       currentFont = prefs.getString('font') ?? 'manrope';
@@ -138,7 +139,6 @@ class HomeTab extends StatefulWidget {
 class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   late final V2ray v2ray;
   late AnimationController _pulseController;
-  late AnimationController _bgController;
   bool isLoading = false;
   String connectionState = 'DISCONNECTED';
 
@@ -158,10 +158,11 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     _loadSettings();
     
     _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
-    _bgController = AnimationController(vsync: this, duration: const Duration(seconds: 10))..repeat(reverse: true);
 
     v2ray = V2ray(
-      onStatusChanged: (status) => setState(() => connectionState = status.state),
+      onStatusChanged: (status) {
+        if (mounted) setState(() => connectionState = status.state);
+      },
     );
     v2ray.initialize(notificationIconResourceType: "mipmap", notificationIconResourceName: "ic_launcher");
   }
@@ -169,7 +170,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   @override
   void dispose() {
     _pulseController.dispose();
-    _bgController.dispose();
     super.dispose();
   }
 
@@ -184,6 +184,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
 
   Future<void> _loadSettings() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       subscriptionUrl = prefs.getString('subscriptionUrl') ?? "";
       weatherEffects = prefs.getBool('weatherEffects') ?? false;
@@ -193,7 +194,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
 
   Future<void> _fetchSubscription() async {
     if (subscriptionUrl.isEmpty) return;
-    setState(() => isLoading = true);
+    if (mounted) setState(() => isLoading = true);
     try {
       final response = await http.get(Uri.parse(subscriptionUrl));
       final userInfo = response.headers['subscription-userinfo'];
@@ -224,7 +225,10 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       parsedServers.clear();
       for (var line in lines) {
         line = line.trim();
-        if (line.startsWith('vless://') || line.startsWith('vmess://') || line.startsWith('trojan://')) {
+        // Поддержка: vless, vmess, trojan, hysteria2, ss
+        if (line.startsWith('vless://') || line.startsWith('vmess://') || 
+            line.startsWith('trojan://') || line.startsWith('hy2://') || 
+            line.startsWith('hysteria2://') || line.startsWith('ss://')) {
           try { parsedServers.add(V2ray.parseFromURL(line)); } catch (_) {}
         }
       }
@@ -274,25 +278,22 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
 
     return Stack(
       children: [
-        AnimatedBuilder(
-          animation: _bgController,
-          builder: (context, child) {
-            return Container(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(-0.8 + (_bgController.value * 0.2), -0.8 + (_bgController.value * 0.1)),
-                  radius: 1.8,
-                  colors: [
-                    colors['bg']!,
-                    colors['accent2']!.withValues(alpha: 0.3 + (_bgController.value * 0.2)),
-                  ],
-                ),
-              ),
-            );
-          },
+        // Фон
+        Container(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: const Alignment(-0.8, -0.8),
+              radius: 1.8,
+              colors: [
+                colors['bg']!,
+                colors['accent2']!.withValues(alpha: 0.3),
+              ],
+            ),
+          ),
         ),
         
-        if (weatherEffects) const WeatherEffect(),
+        // Снег (только если включен, с проверкой)
+        if (weatherEffects && mounted) const WeatherEffect(),
 
         SafeArea(
           child: SingleChildScrollView(
@@ -422,7 +423,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   }
 }
 
-// --- АНИМАЦИЯ СНЕГА ---
+// --- АНИМАЦИЯ СНЕГА (с проверкой mounted) ---
 class WeatherEffect extends StatefulWidget {
   const WeatherEffect({super.key});
 
@@ -443,16 +444,19 @@ class _WeatherEffectState extends State<WeatherEffect> with SingleTickerProvider
       _flakes.add(Snowflake.random(_random));
     }
     _controller.addListener(() {
-      setState(() {
-        for (var flake in _flakes) {
-          flake.update();
-        }
-      });
+      if (mounted) {
+        setState(() {
+          for (var flake in _flakes) {
+            flake.update();
+          }
+        });
+      }
     });
   }
 
   @override
   void dispose() {
+    _controller.stop();
     _controller.dispose();
     super.dispose();
   }
@@ -499,7 +503,7 @@ class SnowPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// --- НАСТРОЙКИ (3 РАЗДЕЛА) ---
+// --- НАСТРОЙКИ ---
 class SettingsTab extends StatefulWidget {
   final String currentTheme;
   final Function(String) onThemeChanged;
@@ -532,8 +536,15 @@ class _SettingsTabState extends State<SettingsTab> {
     _loadSettings();
   }
 
+  @override
+  void dispose() {
+    _linkController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadSettings() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       _linkController.text = prefs.getString('subscriptionUrl') ?? "";
       bypassRussia = prefs.getBool('bypassRussia') ?? true;
@@ -552,7 +563,9 @@ class _SettingsTabState extends State<SettingsTab> {
     await prefs.setBool('autoStart', autoStart);
     await prefs.setBool('fragmentation', fragmentation);
     await prefs.setBool('weatherEffects', weatherEffects);
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сохранено!')));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сохранено!')));
+    }
   }
 
   @override
@@ -568,7 +581,6 @@ class _SettingsTabState extends State<SettingsTab> {
               Text('Настройки', style: GoogleFonts.manrope(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
               const SizedBox(height: 30),
 
-              // 1. ПОДПИСКА
               _buildSectionTitle('Подписка'),
               TextField(
                 controller: _linkController,
@@ -578,7 +590,6 @@ class _SettingsTabState extends State<SettingsTab> {
               ),
               const SizedBox(height: 20),
 
-              // 2. ТУННЕЛЬ
               _buildSectionTitle('Туннель'),
               _buildSwitch('Обход РФ', 'Госуслуги и банки напрямую', bypassRussia, (v) => setState(() => bypassRussia = v)),
               const SizedBox(height: 10),
@@ -589,7 +600,6 @@ class _SettingsTabState extends State<SettingsTab> {
               _buildSwitch('Фрагментация', 'Обход DPI (если провайдер режет)', fragmentation, (v) => setState(() => fragmentation = v)),
               const SizedBox(height: 20),
 
-              // 3. ВНЕШНИЙ ВИД
               _buildSectionTitle('Внешний вид'),
               Text('Тема', style: GoogleFonts.manrope(fontSize: 14, color: Colors.grey)),
               const SizedBox(height: 8),
