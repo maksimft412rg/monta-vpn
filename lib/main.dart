@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 
 void main() => runApp(const MyApp());
 
@@ -17,24 +19,41 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   String currentTheme = 'neon';
+  String currentFont = 'manrope';
 
   @override
   void initState() {
     super.initState();
-    _loadTheme();
+    _loadSettings();
   }
 
-  Future<void> _loadTheme() async {
+  Future<void> _loadSettings() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
       currentTheme = prefs.getString('theme') ?? 'neon';
+      currentFont = prefs.getString('font') ?? 'manrope';
     });
   }
 
   void changeTheme(String newTheme) {
-    setState(() {
-      currentTheme = newTheme;
-    });
+    setState(() => currentTheme = newTheme);
+  }
+
+  void changeFont(String newFont) {
+    setState(() => currentFont = newFont);
+  }
+
+  TextTheme _getTextTheme() {
+    switch (currentFont) {
+      case 'oswald':
+        return GoogleFonts.oswaldTextTheme();
+      case 'lato':
+        return GoogleFonts.latoTextTheme();
+      case 'poppins':
+        return GoogleFonts.poppinsTextTheme();
+      default:
+        return GoogleFonts.manropeTextTheme();
+    }
   }
 
   @override
@@ -44,12 +63,14 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        textTheme: GoogleFonts.manropeTextTheme(),
+        textTheme: _getTextTheme(),
         useMaterial3: true,
       ),
       home: MainScreen(
         currentTheme: currentTheme,
         onThemeChanged: changeTheme,
+        currentFont: currentFont,
+        onFontChanged: changeFont,
       ),
     );
   }
@@ -58,11 +79,15 @@ class _MyAppState extends State<MyApp> {
 class MainScreen extends StatefulWidget {
   final String currentTheme;
   final Function(String) onThemeChanged;
+  final String currentFont;
+  final Function(String) onFontChanged;
 
   const MainScreen({
     super.key,
     required this.currentTheme,
     required this.onThemeChanged,
+    required this.currentFont,
+    required this.onFontChanged,
   });
 
   @override
@@ -81,6 +106,8 @@ class _MainScreenState extends State<MainScreen> {
           : SettingsTab(
               currentTheme: widget.currentTheme,
               onThemeChanged: widget.onThemeChanged,
+              currentFont: widget.currentFont,
+              onFontChanged: widget.onFontChanged,
             ),
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(16),
@@ -88,9 +115,6 @@ class _MainScreenState extends State<MainScreen> {
           color: const Color(0xFF1B1E21).withValues(alpha: 0.85),
           borderRadius: BorderRadius.circular(30),
           border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 20, offset: const Offset(0, 10)),
-          ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(30),
@@ -137,6 +161,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   String expireDate = "—";
 
   bool weatherEffects = false;
+  String? backgroundImagePath;
 
   @override
   void initState() {
@@ -173,6 +198,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     setState(() {
       subscriptionUrl = prefs.getString('subscriptionUrl') ?? "";
       weatherEffects = prefs.getBool('weatherEffects') ?? false;
+      backgroundImagePath = prefs.getString('backgroundImage');
     });
     if (subscriptionUrl.isNotEmpty) {
       _fetchSubscription();
@@ -262,24 +288,34 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
 
     return Stack(
       children: [
-        // Анимированный фон
-        AnimatedBuilder(
-          animation: _bgController,
-          builder: (context, child) {
-            return Container(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(-0.8 + (_bgController.value * 0.2), -0.8 + (_bgController.value * 0.1)),
-                  radius: 1.8,
-                  colors: [
-                    colors['bg']!,
-                    colors['accent2']!.withValues(alpha: 0.3 + (_bgController.value * 0.2)),
-                  ],
+        // Фон (картинка или градиент)
+        if (backgroundImagePath != null && File(backgroundImagePath!).existsSync())
+          Positioned.fill(
+            child: Image.file(
+              File(backgroundImagePath!),
+              fit: BoxFit.cover,
+              color: Colors.black.withValues(alpha: 0.5),
+              colorBlendMode: BlendMode.darken,
+            ),
+          )
+        else
+          AnimatedBuilder(
+            animation: _bgController,
+            builder: (context, child) {
+              return Container(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment(-0.8 + (_bgController.value * 0.2), -0.8 + (_bgController.value * 0.1)),
+                    radius: 1.8,
+                    colors: [
+                      colors['bg']!,
+                      colors['accent2']!.withValues(alpha: 0.3 + (_bgController.value * 0.2)),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
-        ),
+              );
+            },
+          ),
         
         // Снег/Дождь
         if (weatherEffects) const WeatherEffect(),
@@ -493,11 +529,15 @@ class SnowPainter extends CustomPainter {
 class SettingsTab extends StatefulWidget {
   final String currentTheme;
   final Function(String) onThemeChanged;
+  final String currentFont;
+  final Function(String) onFontChanged;
 
   const SettingsTab({
     super.key,
     required this.currentTheme,
     required this.onThemeChanged,
+    required this.currentFont,
+    required this.onFontChanged,
   });
 
   @override
@@ -511,6 +551,7 @@ class _SettingsTabState extends State<SettingsTab> {
   bool autoStart = false;
   bool fragmentation = false;
   bool weatherEffects = false;
+  String? backgroundImagePath;
 
   @override
   void initState() {
@@ -527,6 +568,7 @@ class _SettingsTabState extends State<SettingsTab> {
       autoStart = prefs.getBool('autoStart') ?? false;
       fragmentation = prefs.getBool('fragmentation') ?? false;
       weatherEffects = prefs.getBool('weatherEffects') ?? false;
+      backgroundImagePath = prefs.getString('backgroundImage');
     });
   }
 
@@ -538,7 +580,20 @@ class _SettingsTabState extends State<SettingsTab> {
     await prefs.setBool('autoStart', autoStart);
     await prefs.setBool('fragmentation', fragmentation);
     await prefs.setBool('weatherEffects', weatherEffects);
+    if (backgroundImagePath != null) {
+      await prefs.setString('backgroundImage', backgroundImagePath!);
+    }
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сохранено!')));
+  }
+
+  Future<void> _pickBackgroundImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        backgroundImagePath = pickedFile.path;
+      });
+    }
   }
 
   @override
@@ -564,6 +619,7 @@ class _SettingsTabState extends State<SettingsTab> {
               ),
               const SizedBox(height: 30),
 
+              // Тема
               Text('Тема оформления', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
               const SizedBox(height: 10),
               Container(
@@ -588,6 +644,61 @@ class _SettingsTabState extends State<SettingsTab> {
                       await prefs.setString('theme', val);
                     }
                   },
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Шрифт
+              Text('Шрифт', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
+                child: DropdownButton<String>(
+                  value: widget.currentFont,
+                  dropdownColor: const Color(0xFF1B1E21),
+                  style: const TextStyle(color: Colors.white),
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  items: const [
+                    DropdownMenuItem(value: 'manrope', child: Text('Manrope (жирный)')),
+                    DropdownMenuItem(value: 'oswald', child: Text('Oswald (тонкий)')),
+                    DropdownMenuItem(value: 'lato', child: Text('Lato (обычный)')),
+                    DropdownMenuItem(value: 'poppins', child: Text('Poppins (круглый)')),
+                  ],
+                  onChanged: (val) async {
+                    if (val != null) {
+                      widget.onFontChanged(val);
+                      SharedPreferences prefs = await SharedPreferences.getInstance();
+                      await prefs.setString('font', val);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Фон
+              Text('Фон (из галереи)', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: _pickBackgroundImage,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.image_rounded, color: const Color(0xFFFF2BD6), size: 24),
+                      const SizedBox(width: 12),
+                      Text(
+                        backgroundImagePath != null ? 'Фон выбран (нажмите, чтобы сменить)' : 'Выбрать фото из галереи',
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
