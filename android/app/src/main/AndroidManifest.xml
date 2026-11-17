@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Разрешение для работы VPN-туннеля (обязательно для VPN-приложений) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    
     <!-- Разрешения для доступа к галерее (Android 12 и ниже) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <!-- Разрешения для доступа к галерее (Android 13 и выше) -->
