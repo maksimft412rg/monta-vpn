@@ -1,12 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
 
 void main() => runApp(const MyApp());
 
@@ -35,24 +33,15 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  void changeTheme(String newTheme) {
-    setState(() => currentTheme = newTheme);
-  }
-
-  void changeFont(String newFont) {
-    setState(() => currentFont = newFont);
-  }
+  void changeTheme(String newTheme) => setState(() => currentTheme = newTheme);
+  void changeFont(String newFont) => setState(() => currentFont = newFont);
 
   TextTheme _getTextTheme() {
     switch (currentFont) {
-      case 'oswald':
-        return GoogleFonts.oswaldTextTheme();
-      case 'lato':
-        return GoogleFonts.latoTextTheme();
-      case 'poppins':
-        return GoogleFonts.poppinsTextTheme();
-      default:
-        return GoogleFonts.manropeTextTheme();
+      case 'oswald': return GoogleFonts.oswaldTextTheme();
+      case 'lato': return GoogleFonts.latoTextTheme();
+      case 'poppins': return GoogleFonts.poppinsTextTheme();
+      default: return GoogleFonts.manropeTextTheme();
     }
   }
 
@@ -112,9 +101,10 @@ class _MainScreenState extends State<MainScreen> {
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1B1E21).withValues(alpha: 0.85),
+          color: const Color(0xFF1B1E21).withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(30),
           border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 20, offset: const Offset(0, 10))],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(30),
@@ -161,7 +151,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   String expireDate = "—";
 
   bool weatherEffects = false;
-  String? backgroundImagePath;
 
   @override
   void initState() {
@@ -198,11 +187,8 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     setState(() {
       subscriptionUrl = prefs.getString('subscriptionUrl') ?? "";
       weatherEffects = prefs.getBool('weatherEffects') ?? false;
-      backgroundImagePath = prefs.getString('backgroundImage');
     });
-    if (subscriptionUrl.isNotEmpty) {
-      _fetchSubscription();
-    }
+    if (subscriptionUrl.isNotEmpty) _fetchSubscription();
   }
 
   Future<void> _fetchSubscription() async {
@@ -288,33 +274,23 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
 
     return Stack(
       children: [
-        if (backgroundImagePath != null && File(backgroundImagePath!).existsSync())
-          Positioned.fill(
-            child: Image.file(
-              File(backgroundImagePath!),
-              fit: BoxFit.cover,
-              color: Colors.black.withValues(alpha: 0.5),
-              colorBlendMode: BlendMode.darken,
-            ),
-          )
-        else
-          AnimatedBuilder(
-            animation: _bgController,
-            builder: (context, child) {
-              return Container(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment(-0.8 + (_bgController.value * 0.2), -0.8 + (_bgController.value * 0.1)),
-                    radius: 1.8,
-                    colors: [
-                      colors['bg']!,
-                      colors['accent2']!.withValues(alpha: 0.3 + (_bgController.value * 0.2)),
-                    ],
-                  ),
+        AnimatedBuilder(
+          animation: _bgController,
+          builder: (context, child) {
+            return Container(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(-0.8 + (_bgController.value * 0.2), -0.8 + (_bgController.value * 0.1)),
+                  radius: 1.8,
+                  colors: [
+                    colors['bg']!,
+                    colors['accent2']!.withValues(alpha: 0.3 + (_bgController.value * 0.2)),
+                  ],
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
+        ),
         
         if (weatherEffects) const WeatherEffect(),
 
@@ -523,7 +499,7 @@ class SnowPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// --- НАСТРОЙКИ ---
+// --- НАСТРОЙКИ (3 РАЗДЕЛА) ---
 class SettingsTab extends StatefulWidget {
   final String currentTheme;
   final Function(String) onThemeChanged;
@@ -549,7 +525,6 @@ class _SettingsTabState extends State<SettingsTab> {
   bool autoStart = false;
   bool fragmentation = false;
   bool weatherEffects = false;
-  String? backgroundImagePath;
 
   @override
   void initState() {
@@ -566,7 +541,6 @@ class _SettingsTabState extends State<SettingsTab> {
       autoStart = prefs.getBool('autoStart') ?? false;
       fragmentation = prefs.getBool('fragmentation') ?? false;
       weatherEffects = prefs.getBool('weatherEffects') ?? false;
-      backgroundImagePath = prefs.getString('backgroundImage');
     });
   }
 
@@ -578,20 +552,7 @@ class _SettingsTabState extends State<SettingsTab> {
     await prefs.setBool('autoStart', autoStart);
     await prefs.setBool('fragmentation', fragmentation);
     await prefs.setBool('weatherEffects', weatherEffects);
-    if (backgroundImagePath != null) {
-      await prefs.setString('backgroundImage', backgroundImagePath!);
-    }
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сохранено!')));
-  }
-
-  Future<void> _pickBackgroundImage() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        backgroundImagePath = pickedFile.path;
-      });
-    }
   }
 
   @override
@@ -607,18 +568,31 @@ class _SettingsTabState extends State<SettingsTab> {
               Text('Настройки', style: GoogleFonts.manrope(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
               const SizedBox(height: 30),
 
-              Text('Ссылка на подписку', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
+              // 1. ПОДПИСКА
+              _buildSectionTitle('Подписка'),
               TextField(
                 controller: _linkController,
                 style: const TextStyle(color: Colors.white, fontSize: 13),
                 maxLines: 3,
                 decoration: InputDecoration(hintText: 'https://...', hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: Colors.white.withValues(alpha: 0.05), border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 20),
 
-              Text('Тема оформления', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
+              // 2. ТУННЕЛЬ
+              _buildSectionTitle('Туннель'),
+              _buildSwitch('Обход РФ', 'Госуслуги и банки напрямую', bypassRussia, (v) => setState(() => bypassRussia = v)),
               const SizedBox(height: 10),
+              _buildSwitch('Kill Switch', 'Блокировать интернет при обрыве VPN', killSwitch, (v) => setState(() => killSwitch = v)),
+              const SizedBox(height: 10),
+              _buildSwitch('Автозапуск', 'Включать VPN при старте телефона', autoStart, (v) => setState(() => autoStart = v)),
+              const SizedBox(height: 10),
+              _buildSwitch('Фрагментация', 'Обход DPI (если провайдер режет)', fragmentation, (v) => setState(() => fragmentation = v)),
+              const SizedBox(height: 20),
+
+              // 3. ВНЕШНИЙ ВИД
+              _buildSectionTitle('Внешний вид'),
+              Text('Тема', style: GoogleFonts.manrope(fontSize: 14, color: Colors.grey)),
+              const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
@@ -643,10 +617,9 @@ class _SettingsTabState extends State<SettingsTab> {
                   },
                 ),
               ),
-              const SizedBox(height: 20),
-
-              Text('Шрифт', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
+              const SizedBox(height: 15),
+              Text('Шрифт', style: GoogleFonts.manrope(fontSize: 14, color: Colors.grey)),
+              const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
@@ -671,38 +644,8 @@ class _SettingsTabState extends State<SettingsTab> {
                   },
                 ),
               ),
-              const SizedBox(height: 20),
-
-              Text('Фон (из галереи)', style: GoogleFonts.manrope(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
-              GestureDetector(
-                onTap: _pickBackgroundImage,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
-                  child: Row(
-                    children: [
-                      Icon(Icons.image_rounded, color: const Color(0xFFFF2BD6), size: 24),
-                      const SizedBox(width: 12),
-                      Text(
-                        backgroundImagePath != null ? 'Фон выбран (нажмите, чтобы сменить)' : 'Выбрать фото из галереи',
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              _buildSwitch('Обход РФ', 'Госуслуги и банки напрямую', bypassRussia, (v) => setState(() => bypassRussia = v)),
-              const SizedBox(height: 10),
-              _buildSwitch('Kill Switch', 'Блокировать интернет при обрыве VPN', killSwitch, (v) => setState(() => killSwitch = v)),
-              const SizedBox(height: 10),
-              _buildSwitch('Автозапуск', 'Включать VPN при старте телефона', autoStart, (v) => setState(() => autoStart = v)),
-              const SizedBox(height: 10),
-              _buildSwitch('Фрагментация', 'Обход DPI (если провайдер режет)', fragmentation, (v) => setState(() => fragmentation = v)),
-              const SizedBox(height: 10),
-              _buildSwitch('Погодные эффекты', 'Снег/Дождь на фоне', weatherEffects, (v) => setState(() => weatherEffects = v)),
+              const SizedBox(height: 15),
+              _buildSwitch('Погодные эффекты', 'Снег на фоне', weatherEffects, (v) => setState(() => weatherEffects = v)),
 
               const SizedBox(height: 40),
 
@@ -715,6 +658,13 @@ class _SettingsTabState extends State<SettingsTab> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 15),
+      child: Text(title, style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFFFF2BD6))),
     );
   }
 
