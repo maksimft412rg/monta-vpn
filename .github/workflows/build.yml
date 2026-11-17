@@ -15,27 +15,30 @@ jobs:
         with:
           flutter-version: '3.50.0'
 
+      # 1. Удаляем старую папку android, чтобы Flutter создал чистую
       - name: Remove old android
         run: rm -rf android
 
+      # 2. Создаем новую папку android
       - name: Create new android
         run: flutter create . --platforms=android
 
+      # 3. Устанавливаем зависимости
       - name: Install dependencies
         run: flutter pub get
 
-      # Прямой вызов Gradle с пропуском проблемных задач Lint
-      - name: Build APK (skip lint)
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleRelease -x lintVitalAnalyzeRelease -x lintVitalRelease -x lintVitalReportRelease
-          cd ..
+      # 4. Просто собираем APK (без хитростей с Gradle)
+      - name: Build APK
+        run: flutter build apk --release
 
-      # Копируем готовый APK в место, откуда GitHub его заберет
+      # 5. Ищем готовый APK и копируем его в стандартное место
       - name: Copy APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk build/app/outputs/flutter-apk/app-release.apk
-
+        run: |
+          find . -name "*.apk"
+          mkdir -p build/app/outputs/flutter-apk/
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/app-release.apk || true
+          
+      # 6. Загружаем артефакт
       - uses: actions/upload-artifact@v4
         with:
           name: release-apk
