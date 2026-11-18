@@ -903,4 +903,55 @@ class _SettingsTabState extends State<SettingsTab> {
                   isExpanded: true,
                   underline: const SizedBox(),
                   items: const [
-                    DropdownMenuItem(value: 'manrope', child: Text('Man
+                    DropdownMenuItem(value: 'manrope', child: Text('Manrope (жирный)')),
+                    DropdownMenuItem(value: 'oswald', child: Text('Oswald (тонкий)')),
+                    DropdownMenuItem(value: 'lato', child: Text('Lato (обычный)')),
+                    DropdownMenuItem(value: 'poppins', child: Text('Poppins (круглый)')),
+                  ],
+                  onChanged: (val) async {
+                    if (val != null) {
+                      widget.onFontChanged(val);
+                      SharedPreferences prefs = await SharedPreferences.getInstance();
+                      await prefs.setString('font', val);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(height: 15),
+              _buildSwitch('Погодные эффекты', 'Снег на фоне', weatherEffects, (v) => setState(() => weatherEffects = v)),
+
+              const SizedBox(height: 40),
+
+              ElevatedButton(
+                onPressed: _saveSettings,
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF2BD6), padding: const EdgeInsets.symmetric(vertical: 18), minimumSize: const Size(double.infinity, 0), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                child: const Text('Сохранить', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 15),
+      child: Text(title, style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFFFF2BD6))),
+    );
+  }
+
+  Widget _buildSwitch(String title, String subtitle, bool value, Function(bool) onChanged) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey))])),
+          Switch(value: value, activeColor: const Color(0xFFFF2BD6), onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}
