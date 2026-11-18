@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray_client/flutter_v2ray.dart';
@@ -127,7 +128,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// --- ГЛАВНАЯ (С АВТО-ВЫБОРОМ) ---
+// --- ГЛАВНАЯ (С РЕАЛЬНЫМ ПИНГОМ) ---
 class HomeTab extends StatefulWidget {
   final String theme;
   const HomeTab({super.key, required this.theme});
@@ -147,9 +148,8 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   List<V2RayURL> parsedServers = [];
   int currentServer = 0;
 
-  // Авто-выбор
   bool autoSelect = true;
-  Map<int, int> serverPings = {}; // id сервера -> пинг в мс
+  Map<int, int> serverPings = {};
 
   String trafficUsed = "—";
   String trafficTotal = "—";
@@ -240,8 +240,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         }
       }
       if (parsedServers.isEmpty) _showErrorDialog('В подписке нет серверов');
-
-      // Замер пинга для всех серверов
       _measurePings();
     } catch (e) {
       _showErrorDialog('Ошибка загрузки подписки');
@@ -250,39 +248,40 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     }
   }
 
-  // Замер пинга для каждого сервера
+  // РЕАЛЬНЫЙ ЗАМЕР ПИНГА
   Future<void> _measurePings() async {
     for (int i = 0; i < parsedServers.length; i++) {
-      final start = DateTime.now();
+      final server = parsedServers[i];
+      // Получаем хост из remark (или из URL, если поменяем парсер)
+      // В данный момент берём адрес из remark (это может быть не совсем корректно, но для примера)
+      final address = server.address ?? '';
+      if (address.isEmpty) continue;
+      
       try {
-        // Пытаемся подключиться к серверу, чтобы замерить время
-        // В реальности для пинга нужно использовать TCP-соединение
-        // Здесь мы просто имитируем замер для демонстрации
-        await Future.delayed(const Duration(milliseconds: 100));
+        final start = DateTime.now();
+        final socket = await Socket.connect(address, 443, timeout: const Duration(seconds: 3));
+        socket.destroy();
         final ping = DateTime.now().difference(start).inMilliseconds;
         if (mounted) {
-          setState(() {
-            serverPings[i] = ping;
-          });
+          setState(() => serverPings[i] = ping);
         }
       } catch (e) {
-        // Игнорируем ошибки
+        if (mounted) {
+          setState(() => serverPings[i] = 9999);
+        }
       }
     }
-    // После замеров, если включен авто-выбор, выбираем лучший сервер
     if (autoSelect && serverPings.isNotEmpty) {
-      int bestServer = 0;
-      int minPing = 9999;
-      serverPings.forEach((serverId, ping) {
+      int best = 0;
+      int minPing = 99999;
+      serverPings.forEach((id, ping) {
         if (ping < minPing) {
           minPing = ping;
-          bestServer = serverId;
+          best = id;
         }
       });
       if (mounted) {
-        setState(() {
-          currentServer = bestServer;
-        });
+        setState(() => currentServer = best);
       }
     }
   }
@@ -367,7 +366,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                   ),
                 ),
 
-                // Кнопка подключения в стеклянной карточке
+                // Кнопка
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20),
                   padding: const EdgeInsets.all(20),
@@ -546,9 +545,9 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                                     ),
                                     if (ping != null)
                                       Text(
-                                        '$ping мс',
+                                        ping == 9999 ? 'н/д' : '$ping мс',
                                         style: TextStyle(
-                                          color: ping < 100 ? Colors.green : ping < 200 ? Colors.orange : Colors.red,
+                                          color: ping == 9999 ? Colors.red : ping < 100 ? Colors.green : ping < 200 ? Colors.orange : Colors.red,
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,
                                         ),
