@@ -157,7 +157,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     super.initState();
     _loadSettings();
     
-    _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat(reverse: true);
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))..repeat(reverse: true);
 
     v2ray = V2ray(
       onStatusChanged: (status) {
@@ -225,7 +225,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       parsedServers.clear();
       for (var line in lines) {
         line = line.trim();
-        // Поддержка: vless, vmess, trojan, hysteria2, ss
         if (line.startsWith('vless://') || line.startsWith('vmess://') || 
             line.startsWith('trojan://') || line.startsWith('hy2://') || 
             line.startsWith('hysteria2://') || line.startsWith('ss://')) {
@@ -243,6 +242,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   void toggleVPN() async {
     if (connectionState == 'CONNECTED') {
       v2ray.stopV2Ray();
+      if (mounted) setState(() => connectionState = 'DISCONNECTED');
       return;
     }
     if (parsedServers.isEmpty) {
@@ -254,6 +254,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       final parser = parsedServers[currentServer];
       if (await v2ray.requestPermission()) {
         v2ray.startV2Ray(remark: parser.remark, config: parser.getFullConfiguration(), proxyOnly: false);
+        if (mounted) setState(() => connectionState = 'CONNECTED');
       }
     } catch (e) {
       _showErrorDialog('Ошибка подключения: $e');
@@ -278,7 +279,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
 
     return Stack(
       children: [
-        // Фон
         Container(
           decoration: BoxDecoration(
             gradient: RadialGradient(
@@ -292,7 +292,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           ),
         ),
         
-        // Снег (только если включен, с проверкой)
         if (weatherEffects && mounted) const WeatherEffect(),
 
         SafeArea(
@@ -322,20 +321,16 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                       alignment: Alignment.center,
                       children: [
                         ScaleTransition(
-                          scale: Tween(begin: 1.0, end: 1.3).animate(_pulseController),
+                          scale: Tween(begin: 0.95, end: 1.15).animate(_pulseController),
                           child: Container(width: 220, height: 220, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.1), width: 1))),
                         ),
-                        ScaleTransition(
-                          scale: Tween(begin: 0.9, end: 1.15).animate(_pulseController),
-                          child: Container(width: 190, height: 190, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.3), width: 2))),
-                        ),
                         AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
+                          duration: const Duration(milliseconds: 250),
                           width: 160, height: 160,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: LinearGradient(colors: isConnected ? [Colors.green, Colors.greenAccent] : [colors['accent']!, colors['accent2']!]),
-                            boxShadow: [BoxShadow(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.6), blurRadius: 60, spreadRadius: 10)],
+                            boxShadow: [BoxShadow(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.6), blurRadius: 40, spreadRadius: 8)],
                           ),
                           child: isLoading ? const Center(child: CircularProgressIndicator(color: Colors.white)) : const Icon(Icons.power_settings_new_rounded, size: 70, color: Colors.white),
                         ),
@@ -377,7 +372,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                             return GestureDetector(
                               onTap: () => setState(() => currentServer = entry.key),
                               child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
+                                duration: const Duration(milliseconds: 150),
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
@@ -423,7 +418,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   }
 }
 
-// --- АНИМАЦИЯ СНЕГА (с проверкой mounted) ---
+// --- АНИМАЦИЯ СНЕГА (облегчённая) ---
 class WeatherEffect extends StatefulWidget {
   const WeatherEffect({super.key});
 
@@ -440,7 +435,7 @@ class _WeatherEffectState extends State<WeatherEffect> with SingleTickerProvider
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
-    for (int i = 0; i < 50; i++) {
+    for (int i = 0; i < 30; i++) {
       _flakes.add(Snowflake.random(_random));
     }
     _controller.addListener(() {
