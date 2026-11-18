@@ -127,7 +127,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// --- ГЛАВНАЯ ---
+// --- ГЛАВНАЯ (КРАСИВАЯ ВЕРСИЯ) ---
 class HomeTab extends StatefulWidget {
   final String theme;
   const HomeTab({super.key, required this.theme});
@@ -139,6 +139,7 @@ class HomeTab extends StatefulWidget {
 class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   late final V2ray v2ray;
   late AnimationController _pulseController;
+  late AnimationController _bgController;
   bool isLoading = false;
   String connectionState = 'DISCONNECTED';
 
@@ -157,7 +158,8 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     super.initState();
     _loadSettings();
     
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))..repeat(reverse: true);
+    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+    _bgController = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat(reverse: true);
 
     v2ray = V2ray(
       onStatusChanged: (status) {
@@ -170,6 +172,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   @override
   void dispose() {
     _pulseController.dispose();
+    _bgController.dispose();
     super.dispose();
   }
 
@@ -279,17 +282,23 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
 
     return Stack(
       children: [
-        Container(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: const Alignment(-0.8, -0.8),
-              radius: 1.8,
-              colors: [
-                colors['bg']!,
-                colors['accent2']!.withValues(alpha: 0.3),
-              ],
-            ),
-          ),
+        // Анимированный фон
+        AnimatedBuilder(
+          animation: _bgController,
+          builder: (context, child) {
+            return Container(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment(-0.8 + (_bgController.value * 0.2), -0.8 + (_bgController.value * 0.1)),
+                  radius: 1.8,
+                  colors: [
+                    colors['bg']!,
+                    colors['accent2']!.withValues(alpha: 0.3 + (_bgController.value * 0.2)),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
         
         if (weatherEffects && mounted) const WeatherEffect(),
@@ -299,6 +308,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
             padding: const EdgeInsets.only(bottom: 100),
             child: Column(
               children: [
+                // Шапка
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: Row(
@@ -314,65 +324,123 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                   ),
                 ),
 
-                Center(
-                  child: GestureDetector(
-                    onTap: isLoading ? null : toggleVPN,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        ScaleTransition(
-                          scale: Tween(begin: 0.95, end: 1.15).animate(_pulseController),
-                          child: Container(width: 220, height: 220, decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.1), width: 1))),
-                        ),
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          width: 160, height: 160,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(colors: isConnected ? [Colors.green, Colors.greenAccent] : [colors['accent']!, colors['accent2']!]),
-                            boxShadow: [BoxShadow(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.6), blurRadius: 40, spreadRadius: 8)],
+                // Кнопка подключения в стеклянной карточке
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.03),
+                    borderRadius: BorderRadius.circular(32),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 30, offset: const Offset(0, 15))],
+                  ),
+                  child: Column(
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          ScaleTransition(
+                            scale: Tween(begin: 0.95, end: 1.15).animate(_pulseController),
+                            child: Container(
+                              width: 200, height: 200,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.15), width: 1),
+                              ),
+                            ),
                           ),
-                          child: isLoading ? const Center(child: CircularProgressIndicator(color: Colors.white)) : const Icon(Icons.power_settings_new_rounded, size: 70, color: Colors.white),
-                        ),
-                      ],
-                    ),
+                          GestureDetector(
+                            onTap: isLoading ? null : toggleVPN,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              width: 150, height: 150,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: isConnected ? [Colors.green, Colors.greenAccent] : [colors['accent']!, colors['accent2']!],
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.6),
+                                    blurRadius: 40,
+                                    spreadRadius: 10,
+                                  ),
+                                ],
+                              ),
+                              child: isLoading
+                                  ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                                  : const Icon(Icons.power_settings_new_rounded, size: 60, color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        isConnected ? 'VPN Включен' : 'VPN Отключен',
+                        style: GoogleFonts.manrope(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        isConnected ? 'Ваш трафик защищен' : 'Нажмите для подключения',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(height: 20),
 
-                const SizedBox(height: 30),
-                Text(isConnected ? 'VPN Включен' : 'VPN Отключен', style: GoogleFonts.manrope(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
-                const SizedBox(height: 10),
-                Text(isConnected ? 'Ваш трафик защищен' : 'Нажмите для подключения', style: TextStyle(fontSize: 14, color: Colors.grey[400])),
-                const SizedBox(height: 30),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildGlassCard(Icons.data_usage_rounded, 'Трафик', '$trafficUsed / $trafficTotal'),
-                    const SizedBox(width: 15),
-                    _buildGlassCard(Icons.calendar_today_rounded, 'Срок', expireDate),
-                  ],
+                // Карточки (Трафик и Срок)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      Expanded(child: _buildInfoCard(Icons.data_usage_rounded, 'Трафик', '$trafficUsed / $trafficTotal')),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildInfoCard(Icons.calendar_today_rounded, 'Срок', expireDate)),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 20),
 
+                // Серверы
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Container(
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.03), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white.withValues(alpha: 0.08)), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 20, offset: const Offset(0, 10))]),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Серверы', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)), const Icon(Icons.refresh_rounded, color: Colors.grey, size: 20)]),
-                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Серверы', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                            IconButton(
+                              icon: const Icon(Icons.refresh_rounded, color: Colors.grey, size: 20),
+                              onPressed: () {
+                                _fetchSubscription();
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
                         if (parsedServers.isEmpty)
-                          const Padding(padding: EdgeInsets.all(20), child: Center(child: Text('Подписка не добавлена', style: TextStyle(color: Colors.grey))))
+                          const Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Center(child: Text('Подписка не добавлена', style: TextStyle(color: Colors.grey))),
+                          )
                         else
                           ...parsedServers.asMap().entries.map((entry) {
                             return GestureDetector(
                               onTap: () => setState(() => currentServer = entry.key),
                               child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
+                                duration: const Duration(milliseconds: 200),
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
@@ -382,10 +450,28 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                                 ),
                                 child: Row(
                                   children: [
-                                    Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: currentServer == entry.key ? colors['accent']!.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.dns_rounded, color: currentServer == entry.key ? colors['accent'] : Colors.grey, size: 18)),
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: currentServer == entry.key ? colors['accent']!.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(Icons.dns_rounded, color: currentServer == entry.key ? colors['accent'] : Colors.grey, size: 18),
+                                    ),
                                     const SizedBox(width: 12),
-                                    Expanded(child: Text(entry.value.remark, style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: currentServer == entry.key ? FontWeight.bold : FontWeight.normal), overflow: TextOverflow.ellipsis)),
-                                    if (currentServer == entry.key) Icon(Icons.check_circle_rounded, color: colors['accent'], size: 20),
+                                    Expanded(
+                                      child: Text(
+                                        entry.value.remark,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: currentServer == entry.key ? FontWeight.bold : FontWeight.normal,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (currentServer == entry.key)
+                                      Icon(Icons.check_circle_rounded, color: colors['accent'], size: 20),
                                   ],
                                 ),
                               ),
@@ -403,22 +489,37 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildGlassCard(IconData icon, String title, String value) {
+  Widget _buildInfoCard(IconData icon, String title, String value) {
     return Container(
-      width: 150, padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.08)), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 5))]),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: const Color(0xFFFF2BD6).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: const Color(0xFFFF2BD6), size: 20)),
-        const SizedBox(height: 10),
-        Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
-        const SizedBox(height: 2),
-        Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
-      ]),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 5))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF2BD6).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: const Color(0xFFFF2BD6), size: 20),
+          ),
+          const SizedBox(height: 10),
+          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
+          const SizedBox(height: 2),
+          Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+        ],
+      ),
     );
   }
 }
 
-// --- АНИМАЦИЯ СНЕГА (облегчённая) ---
+// --- АНИМАЦИЯ СНЕГА ---
 class WeatherEffect extends StatefulWidget {
   const WeatherEffect({super.key});
 
