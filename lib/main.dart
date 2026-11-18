@@ -6,6 +6,7 @@ import 'package:flutter_v2ray_client/flutter_v2ray.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 void main() => runApp(const MyApp());
 
@@ -19,6 +20,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   String currentTheme = 'neon';
   String currentFont = 'manrope';
+  String currentColor = '#ff2bd6'; // Цвет акцента
 
   @override
   void initState() {
@@ -32,11 +34,13 @@ class _MyAppState extends State<MyApp> {
     setState(() {
       currentTheme = prefs.getString('theme') ?? 'neon';
       currentFont = prefs.getString('font') ?? 'manrope';
+      currentColor = prefs.getString('accentColor') ?? '#ff2bd6';
     });
   }
 
   void changeTheme(String newTheme) => setState(() => currentTheme = newTheme);
   void changeFont(String newFont) => setState(() => currentFont = newFont);
+  void changeColor(String newColor) => setState(() => currentColor = newColor);
 
   TextTheme _getTextTheme() {
     switch (currentFont) {
@@ -62,6 +66,8 @@ class _MyAppState extends State<MyApp> {
         onThemeChanged: changeTheme,
         currentFont: currentFont,
         onFontChanged: changeFont,
+        currentColor: currentColor,
+        onColorChanged: changeColor,
       ),
     );
   }
@@ -72,6 +78,8 @@ class MainScreen extends StatefulWidget {
   final Function(String) onThemeChanged;
   final String currentFont;
   final Function(String) onFontChanged;
+  final String currentColor;
+  final Function(String) onColorChanged;
 
   const MainScreen({
     super.key,
@@ -79,6 +87,8 @@ class MainScreen extends StatefulWidget {
     required this.onThemeChanged,
     required this.currentFont,
     required this.onFontChanged,
+    required this.currentColor,
+    required this.onColorChanged,
   });
 
   @override
@@ -93,12 +103,14 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       extendBody: true,
       body: _currentIndex == 0
-          ? HomeTab(theme: widget.currentTheme)
+          ? HomeTab(theme: widget.currentTheme, accentColor: widget.currentColor)
           : SettingsTab(
               currentTheme: widget.currentTheme,
               onThemeChanged: widget.onThemeChanged,
               currentFont: widget.currentFont,
               onFontChanged: widget.onFontChanged,
+              currentColor: widget.currentColor,
+              onColorChanged: widget.onColorChanged,
             ),
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(16),
@@ -128,10 +140,11 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// --- ГЛАВНАЯ (С РЕАЛЬНЫМ ПИНГОМ) ---
+// --- ГЛАВНАЯ ---
 class HomeTab extends StatefulWidget {
   final String theme;
-  const HomeTab({super.key, required this.theme});
+  final String accentColor;
+  const HomeTab({super.key, required this.theme, required this.accentColor});
 
   @override
   State<HomeTab> createState() => _HomeTabState();
@@ -156,11 +169,13 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   String expireDate = "—";
 
   bool weatherEffects = false;
+  bool hasInternet = true;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    _checkInternet();
     
     _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
     _bgController = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat(reverse: true);
@@ -180,12 +195,29 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  Future<void> _checkInternet() async {
+    final connectivityResult = await Connectivity().checkConnectivity();
+    if (mounted) {
+      setState(() {
+        hasInternet = connectivityResult != ConnectivityResult.none;
+      });
+    }
+  }
+
+  Color getAccentColor() {
+    try {
+      return Color(int.parse(widget.accentColor.replaceFirst('#', '0xff')));
+    } catch (e) {
+      return const Color(0xFFFF2BD6);
+    }
+  }
+
   Map<String, Color> getThemeColors() {
     switch (widget.theme) {
-      case 'autumn': return {'bg': const Color(0xFF120B07), 'accent': const Color(0xFFFF8A1F), 'accent2': const Color(0xFFC2391B)};
-      case 'ice': return {'bg': const Color(0xFF070C16), 'accent': const Color(0xFF34B6FF), 'accent2': const Color(0xFF3D5BFF)};
-      case 'hw': return {'bg': const Color(0xFF0D0814), 'accent': const Color(0xFFFF7A00), 'accent2': const Color(0xFF8B2CFF)};
-      default: return {'bg': const Color(0xFF0A0812), 'accent': const Color(0xFFFF2BD6), 'accent2': const Color(0xFF7B2CFF)};
+      case 'autumn': return {'bg': const Color(0xFF120B07), 'accent': getAccentColor(), 'accent2': const Color(0xFFC2391B)};
+      case 'ice': return {'bg': const Color(0xFF070C16), 'accent': getAccentColor(), 'accent2': const Color(0xFF3D5BFF)};
+      case 'hw': return {'bg': const Color(0xFF0D0814), 'accent': getAccentColor(), 'accent2': const Color(0xFF8B2CFF)};
+      default: return {'bg': const Color(0xFF0A0812), 'accent': getAccentColor(), 'accent2': const Color(0xFF7B2CFF)};
     }
   }
 
@@ -202,6 +234,10 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
 
   Future<void> _fetchSubscription() async {
     if (subscriptionUrl.isEmpty) return;
+    if (!hasInternet) {
+      _showErrorDialog('У вас нет интернета. Проверьте подключение.');
+      return;
+    }
     if (mounted) setState(() => isLoading = true);
     try {
       final response = await http.get(Uri.parse(subscriptionUrl));
@@ -239,21 +275,21 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           try { parsedServers.add(V2ray.parseFromURL(line)); } catch (_) {}
         }
       }
-      if (parsedServers.isEmpty) _showErrorDialog('В подписке нет серверов');
-      _measurePings();
+      if (parsedServers.isEmpty) {
+        _showErrorDialog('В подписке нет серверов');
+      } else {
+        _measurePings();
+      }
     } catch (e) {
-      _showErrorDialog('Ошибка загрузки подписки');
+      _showErrorDialog('Ошибка загрузки подписки. Проверьте интернет.');
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
   }
 
-  // РЕАЛЬНЫЙ ЗАМЕР ПИНГА
   Future<void> _measurePings() async {
     for (int i = 0; i < parsedServers.length; i++) {
       final server = parsedServers[i];
-      // Получаем хост из remark (или из URL, если поменяем парсер)
-      // В данный момент берём адрес из remark (это может быть не совсем корректно, но для примера)
       final address = server.address ?? '';
       if (address.isEmpty) continue;
       
@@ -262,13 +298,9 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         final socket = await Socket.connect(address, 443, timeout: const Duration(seconds: 3));
         socket.destroy();
         final ping = DateTime.now().difference(start).inMilliseconds;
-        if (mounted) {
-          setState(() => serverPings[i] = ping);
-        }
+        if (mounted) setState(() => serverPings[i] = ping);
       } catch (e) {
-        if (mounted) {
-          setState(() => serverPings[i] = 9999);
-        }
+        if (mounted) setState(() => serverPings[i] = 9999);
       }
     }
     if (autoSelect && serverPings.isNotEmpty) {
@@ -280,9 +312,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           best = id;
         }
       });
-      if (mounted) {
-        setState(() => currentServer = best);
-      }
+      if (mounted) setState(() => currentServer = best);
     }
   }
 
@@ -299,9 +329,19 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     setState(() => isLoading = true);
     try {
       final parser = parsedServers[currentServer];
-      if (await v2ray.requestPermission()) {
-        v2ray.startV2Ray(remark: parser.remark, config: parser.getFullConfiguration(), proxyOnly: false);
+      // Запрашиваем разрешение и запускаем
+      final hasPermission = await v2ray.requestPermission();
+      if (hasPermission) {
+        await v2ray.startV2Ray(
+          remark: parser.remark, 
+          config: parser.getFullConfiguration(), 
+          proxyOnly: false
+        );
+        // Ждем немного, чтобы статус обновился
+        await Future.delayed(const Duration(milliseconds: 500));
         if (mounted) setState(() => connectionState = 'CONNECTED');
+      } else {
+        _showErrorDialog('Разрешение на VPN не получено');
       }
     } catch (e) {
       _showErrorDialog('Ошибка подключения: $e');
@@ -351,6 +391,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
             padding: const EdgeInsets.only(bottom: 100),
             child: Column(
               children: [
+                // Шапка с индикатором интернета
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: Row(
@@ -362,6 +403,9 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                       ),
                       const SizedBox(width: 10),
                       Text('Monta VPN', style: GoogleFonts.manrope(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 1)),
+                      const Spacer(),
+                      if (!hasInternet)
+                        Icon(Icons.wifi_off_rounded, color: Colors.red, size: 24),
                     ],
                   ),
                 ),
@@ -496,6 +540,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                             IconButton(
                               icon: const Icon(Icons.refresh_rounded, color: Colors.grey, size: 20),
                               onPressed: () {
+                                _checkInternet();
                                 _fetchSubscription();
                               },
                             ),
@@ -503,9 +548,14 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                         ),
                         const SizedBox(height: 10),
                         if (parsedServers.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Center(child: Text('Подписка не добавлена', style: TextStyle(color: Colors.grey))),
+                          Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Center(
+                              child: Text(
+                                hasInternet ? 'Подписка не добавлена' : 'У вас нет интернета',
+                                style: TextStyle(color: hasInternet ? Colors.grey : Colors.red),
+                              ),
+                            ),
                           )
                         else
                           ...parsedServers.asMap().entries.map((entry) {
@@ -586,10 +636,10 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: const Color(0xFFFF2BD6).withValues(alpha: 0.15),
+              color: getAccentColor().withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: const Color(0xFFFF2BD6), size: 20),
+            child: Icon(icon, color: getAccentColor(), size: 20),
           ),
           const SizedBox(height: 10),
           Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
@@ -687,6 +737,8 @@ class SettingsTab extends StatefulWidget {
   final Function(String) onThemeChanged;
   final String currentFont;
   final Function(String) onFontChanged;
+  final String currentColor;
+  final Function(String) onColorChanged;
 
   const SettingsTab({
     super.key,
@@ -694,6 +746,8 @@ class SettingsTab extends StatefulWidget {
     required this.onThemeChanged,
     required this.currentFont,
     required this.onFontChanged,
+    required this.currentColor,
+    required this.onColorChanged,
   });
 
   @override
@@ -779,6 +833,37 @@ class _SettingsTabState extends State<SettingsTab> {
               const SizedBox(height: 20),
 
               _buildSectionTitle('Внешний вид'),
+              Text('Цвет акцента', style: GoogleFonts.manrope(fontSize: 14, color: Colors.grey)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  '#ff2bd6', '#ff8a1f', '#34b6ff', '#2ee6a6', '#8b2cff', '#ff5c6c', '#ffb020'
+                ].map((color) {
+                  final isSelected = widget.currentColor == color;
+                  return GestureDetector(
+                    onTap: () {
+                      widget.onColorChanged(color);
+                      SharedPreferences.getInstance().then((prefs) {
+                        prefs.setString('accentColor', color);
+                      });
+                    },
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Color(int.parse(color.replaceFirst('#', '0xff'))),
+                        shape: BoxShape.circle,
+                        border: isSelected ? Border.all(color: Colors.white, width: 3) : null,
+                        boxShadow: [BoxShadow(color: Color(int.parse(color.replaceFirst('#', '0xff'))).withValues(alpha: 0.5), blurRadius: 10)],
+                      ),
+                      child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 15),
               Text('Тема', style: GoogleFonts.manrope(fontSize: 14, color: Colors.grey)),
               const SizedBox(height: 8),
               Container(
@@ -818,55 +903,4 @@ class _SettingsTabState extends State<SettingsTab> {
                   isExpanded: true,
                   underline: const SizedBox(),
                   items: const [
-                    DropdownMenuItem(value: 'manrope', child: Text('Manrope (жирный)')),
-                    DropdownMenuItem(value: 'oswald', child: Text('Oswald (тонкий)')),
-                    DropdownMenuItem(value: 'lato', child: Text('Lato (обычный)')),
-                    DropdownMenuItem(value: 'poppins', child: Text('Poppins (круглый)')),
-                  ],
-                  onChanged: (val) async {
-                    if (val != null) {
-                      widget.onFontChanged(val);
-                      SharedPreferences prefs = await SharedPreferences.getInstance();
-                      await prefs.setString('font', val);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(height: 15),
-              _buildSwitch('Погодные эффекты', 'Снег на фоне', weatherEffects, (v) => setState(() => weatherEffects = v)),
-
-              const SizedBox(height: 40),
-
-              ElevatedButton(
-                onPressed: _saveSettings,
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF2BD6), padding: const EdgeInsets.symmetric(vertical: 18), minimumSize: const Size(double.infinity, 0), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                child: const Text('Сохранить', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: Text(title, style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFFFF2BD6))),
-    );
-  }
-
-  Widget _buildSwitch(String title, String subtitle, bool value, Function(bool) onChanged) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey))])),
-          Switch(value: value, activeColor: const Color(0xFFFF2BD6), onChanged: onChanged),
-        ],
-      ),
-    );
-  }
-}
+                    DropdownMenuItem(value: 'manrope', child: Text('Man
