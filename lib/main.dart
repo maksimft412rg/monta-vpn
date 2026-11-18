@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 void main() => runApp(const MyApp());
 
@@ -20,7 +21,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   String currentTheme = 'neon';
   String currentFont = 'manrope';
-  String currentColor = '#ff2bd6'; // Цвет акцента
+  String currentColor = '#ff2bd6';
 
   @override
   void initState() {
@@ -168,7 +169,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   String trafficTotal = "—";
   String expireDate = "—";
 
-  bool weatherEffects = false;
+  String effectType = 'off';
   bool hasInternet = true;
 
   @override
@@ -226,7 +227,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     if (!mounted) return;
     setState(() {
       subscriptionUrl = prefs.getString('subscriptionUrl') ?? "";
-      weatherEffects = prefs.getBool('weatherEffects') ?? false;
+      effectType = prefs.getString('effectType') ?? 'off';
       autoSelect = prefs.getBool('autoSelect') ?? true;
     });
     if (subscriptionUrl.isNotEmpty) _fetchSubscription();
@@ -329,7 +330,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     setState(() => isLoading = true);
     try {
       final parser = parsedServers[currentServer];
-      // Запрашиваем разрешение и запускаем
       final hasPermission = await v2ray.requestPermission();
       if (hasPermission) {
         await v2ray.startV2Ray(
@@ -337,7 +337,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           config: parser.getFullConfiguration(), 
           proxyOnly: false
         );
-        // Ждем немного, чтобы статус обновился
         await Future.delayed(const Duration(milliseconds: 500));
         if (mounted) setState(() => connectionState = 'CONNECTED');
       } else {
@@ -357,6 +356,36 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ОК'))],
       ));
     }
+  }
+
+  void _showQRCode() {
+    if (subscriptionUrl.isEmpty) {
+      _showErrorDialog('Сначала добавьте подписку в Настройках');
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1B1E21),
+        title: const Text('QR-код подписки', style: TextStyle(color: Colors.white)),
+        content: Container(
+          width: 250,
+          height: 250,
+          color: Colors.white,
+          child: QrImageView(
+            data: subscriptionUrl,
+            version: QrVersions.auto,
+            size: 230,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Закрыть', style: TextStyle(color: Color(0xFFFF2BD6))),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -384,33 +413,50 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           },
         ),
         
-        if (weatherEffects && mounted) const WeatherEffect(),
+        if (effectType != 'off' && mounted) 
+          WeatherEffect(key: ValueKey(effectType), type: effectType),
 
         SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 100),
             child: Column(
               children: [
-                // Шапка с индикатором интернета
                 Padding(
                   padding: const EdgeInsets.all(20.0),
                   child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(color: colors['accent']!.withValues(alpha: 0.2), shape: BoxShape.circle),
-                        child: Icon(Icons.shield_rounded, color: colors['accent'], size: 32),
+                      ClipOval(
+                        child: Image.asset(
+                          'assets/logo.png',
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: colors['accent']!.withValues(alpha: 0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.shield_rounded, color: colors['accent'], size: 24),
+                            );
+                          },
+                        ),
                       ),
                       const SizedBox(width: 10),
                       Text('Monta VPN', style: GoogleFonts.manrope(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 1)),
                       const Spacer(),
                       if (!hasInternet)
                         Icon(Icons.wifi_off_rounded, color: Colors.red, size: 24),
+                      IconButton(
+                        icon: Icon(Icons.qr_code_rounded, color: colors['accent'], size: 24),
+                        onPressed: _showQRCode,
+                      ),
                     ],
                   ),
                 ),
 
-                // Кнопка
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20),
                   padding: const EdgeInsets.all(20),
@@ -477,7 +523,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 20),
 
-                // Карточки
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
@@ -490,7 +535,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 20),
 
-                // Авто-выбор
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Container(
@@ -520,7 +564,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 20),
 
-                // Серверы
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Container(
@@ -651,9 +694,10 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   }
 }
 
-// --- АНИМАЦИЯ СНЕГА ---
+// --- АНИМАЦИЯ ЭФФЕКТОВ (СНЕГ/ЛИСТОПАД) ---
 class WeatherEffect extends StatefulWidget {
-  const WeatherEffect({super.key});
+  final String type;
+  const WeatherEffect({super.key, required this.type});
 
   @override
   State<WeatherEffect> createState() => _WeatherEffectState();
@@ -661,21 +705,22 @@ class WeatherEffect extends StatefulWidget {
 
 class _WeatherEffectState extends State<WeatherEffect> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  final List<Snowflake> _flakes = [];
+  final List<Particle> _particles = [];
   final Random _random = Random();
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
-    for (int i = 0; i < 30; i++) {
-      _flakes.add(Snowflake.random(_random));
+    final count = widget.type == 'leaves' ? 20 : 40;
+    for (int i = 0; i < count; i++) {
+      _particles.add(Particle.random(_random, widget.type));
     }
     _controller.addListener(() {
       if (mounted) {
         setState(() {
-          for (var flake in _flakes) {
-            flake.update();
+          for (var p in _particles) {
+            p.update();
           }
         });
       }
@@ -691,39 +736,65 @@ class _WeatherEffectState extends State<WeatherEffect> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(painter: SnowPainter(_flakes), size: Size.infinite);
+    return CustomPaint(painter: ParticlePainter(_particles, widget.type), size: Size.infinite);
   }
 }
 
-class Snowflake {
-  double x, y, speed, size;
-  Snowflake({required this.x, required this.y, required this.speed, required this.size});
-  factory Snowflake.random(Random random) {
-    return Snowflake(
+class Particle {
+  double x, y, speed, size, angle, rotationSpeed;
+  String type;
+  Color color;
+  
+  Particle({required this.x, required this.y, required this.speed, required this.size, required this.type, required this.angle, required this.rotationSpeed, required this.color});
+  
+  factory Particle.random(Random random, String type) {
+    final isLeaf = type == 'leaves';
+    return Particle(
       x: random.nextDouble() * 400,
       y: random.nextDouble() * 800,
       speed: 1 + random.nextDouble() * 3,
-      size: 2 + random.nextDouble() * 4,
+      size: isLeaf ? 6 + random.nextDouble() * 8 : 2 + random.nextDouble() * 4,
+      type: type,
+      angle: random.nextDouble() * 6,
+      rotationSpeed: (random.nextDouble() - 0.5) * 0.1,
+      color: isLeaf 
+          ? [const Color(0xFFFF8A1F), const Color(0xFFD9461A), const Color(0xFFF2B134), const Color(0xFFA8341C)][random.nextInt(4)]
+          : Colors.white.withValues(alpha: 0.6),
     );
   }
+  
   void update() {
     y += speed;
+    if (type == 'leaves') {
+      x += sin(angle) * 1.5;
+      angle += rotationSpeed;
+    }
     if (y > 800) {
-      y = -10;
+      y = -20;
       x = Random().nextDouble() * 400;
     }
   }
 }
 
-class SnowPainter extends CustomPainter {
-  final List<Snowflake> flakes;
-  SnowPainter(this.flakes);
+class ParticlePainter extends CustomPainter {
+  final List<Particle> particles;
+  final String type;
+  ParticlePainter(this.particles, this.type);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white.withValues(alpha: 0.5)..style = PaintingStyle.fill;
-    for (var flake in flakes) {
-      canvas.drawCircle(Offset(flake.x, flake.y), flake.size, paint);
+    for (var p in particles) {
+      if (type == 'snow') {
+        final paint = Paint()..color = p.color..style = PaintingStyle.fill;
+        canvas.drawCircle(Offset(p.x, p.y), p.size, paint);
+      } else {
+        canvas.save();
+        canvas.translate(p.x, p.y);
+        canvas.rotate(p.angle);
+        final paint = Paint()..color = p.color..style = PaintingStyle.fill;
+        canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: p.size, height: p.size / 2), paint);
+        canvas.restore();
+      }
     }
   }
 
@@ -760,7 +831,7 @@ class _SettingsTabState extends State<SettingsTab> {
   bool killSwitch = false;
   bool autoStart = false;
   bool fragmentation = false;
-  bool weatherEffects = false;
+  String effectType = 'off';
 
   @override
   void initState() {
@@ -783,7 +854,7 @@ class _SettingsTabState extends State<SettingsTab> {
       killSwitch = prefs.getBool('killSwitch') ?? false;
       autoStart = prefs.getBool('autoStart') ?? false;
       fragmentation = prefs.getBool('fragmentation') ?? false;
-      weatherEffects = prefs.getBool('weatherEffects') ?? false;
+      effectType = prefs.getString('effectType') ?? 'off';
     });
   }
 
@@ -794,7 +865,7 @@ class _SettingsTabState extends State<SettingsTab> {
     await prefs.setBool('killSwitch', killSwitch);
     await prefs.setBool('autoStart', autoStart);
     await prefs.setBool('fragmentation', fragmentation);
-    await prefs.setBool('weatherEffects', weatherEffects);
+    await prefs.setString('effectType', effectType);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сохранено!')));
     }
@@ -829,129 +900,4 @@ class _SettingsTabState extends State<SettingsTab> {
               const SizedBox(height: 10),
               _buildSwitch('Автозапуск', 'Включать VPN при старте телефона', autoStart, (v) => setState(() => autoStart = v)),
               const SizedBox(height: 10),
-              _buildSwitch('Фрагментация', 'Обход DPI (если провайдер режет)', fragmentation, (v) => setState(() => fragmentation = v)),
-              const SizedBox(height: 20),
-
-              _buildSectionTitle('Внешний вид'),
-              Text('Цвет акцента', style: GoogleFonts.manrope(fontSize: 14, color: Colors.grey)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  '#ff2bd6', '#ff8a1f', '#34b6ff', '#2ee6a6', '#8b2cff', '#ff5c6c', '#ffb020'
-                ].map((color) {
-                  final isSelected = widget.currentColor == color;
-                  return GestureDetector(
-                    onTap: () {
-                      widget.onColorChanged(color);
-                      SharedPreferences.getInstance().then((prefs) {
-                        prefs.setString('accentColor', color);
-                      });
-                    },
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Color(int.parse(color.replaceFirst('#', '0xff'))),
-                        shape: BoxShape.circle,
-                        border: isSelected ? Border.all(color: Colors.white, width: 3) : null,
-                        boxShadow: [BoxShadow(color: Color(int.parse(color.replaceFirst('#', '0xff'))).withValues(alpha: 0.5), blurRadius: 10)],
-                      ),
-                      child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 15),
-              Text('Тема', style: GoogleFonts.manrope(fontSize: 14, color: Colors.grey)),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
-                child: DropdownButton<String>(
-                  value: widget.currentTheme,
-                  dropdownColor: const Color(0xFF1B1E21),
-                  style: const TextStyle(color: Colors.white),
-                  isExpanded: true,
-                  underline: const SizedBox(),
-                  items: const [
-                    DropdownMenuItem(value: 'neon', child: Text('Неон')),
-                    DropdownMenuItem(value: 'autumn', child: Text('Осень')),
-                    DropdownMenuItem(value: 'ice', child: Text('Лёд')),
-                    DropdownMenuItem(value: 'hw', child: Text('Хэллоуин')),
-                  ],
-                  onChanged: (val) async {
-                    if (val != null) {
-                      widget.onThemeChanged(val);
-                      SharedPreferences prefs = await SharedPreferences.getInstance();
-                      await prefs.setString('theme', val);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(height: 15),
-              Text('Шрифт', style: GoogleFonts.manrope(fontSize: 14, color: Colors.grey)),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
-                child: DropdownButton<String>(
-                  value: widget.currentFont,
-                  dropdownColor: const Color(0xFF1B1E21),
-                  style: const TextStyle(color: Colors.white),
-                  isExpanded: true,
-                  underline: const SizedBox(),
-                  items: const [
-                    DropdownMenuItem(value: 'manrope', child: Text('Manrope (жирный)')),
-                    DropdownMenuItem(value: 'oswald', child: Text('Oswald (тонкий)')),
-                    DropdownMenuItem(value: 'lato', child: Text('Lato (обычный)')),
-                    DropdownMenuItem(value: 'poppins', child: Text('Poppins (круглый)')),
-                  ],
-                  onChanged: (val) async {
-                    if (val != null) {
-                      widget.onFontChanged(val);
-                      SharedPreferences prefs = await SharedPreferences.getInstance();
-                      await prefs.setString('font', val);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(height: 15),
-              _buildSwitch('Погодные эффекты', 'Снег на фоне', weatherEffects, (v) => setState(() => weatherEffects = v)),
-
-              const SizedBox(height: 40),
-
-              ElevatedButton(
-                onPressed: _saveSettings,
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFF2BD6), padding: const EdgeInsets.symmetric(vertical: 18), minimumSize: const Size(double.infinity, 0), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                child: const Text('Сохранить', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: Text(title, style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: const Color(0xFFFF2BD6))),
-    );
-  }
-
-  Widget _buildSwitch(String title, String subtitle, bool value, Function(bool) onChanged) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha: 0.1))),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey))])),
-          Switch(value: value, activeColor: const Color(0xFFFF2BD6), onChanged: onChanged),
-        ],
-      ),
-    );
-  }
-}
+              _buildSwitch('Фрагментация', 'Обход DPI (если провайдер режет)', fragmentation, (v) => setState(()
