@@ -39,16 +39,31 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  void changeTheme(String newTheme) => setState(() => currentTheme = newTheme);
-  void changeFont(String newFont) => setState(() => currentFont = newFont);
-  void changeColor(String newColor) => setState(() => currentColor = newColor);
+  void changeTheme(String newTheme) {
+    setState(() => currentTheme = newTheme);
+    SharedPreferences.getInstance().then((p) => p.setString('theme', newTheme));
+  }
+
+  void changeFont(String newFont) {
+    setState(() => currentFont = newFont);
+    SharedPreferences.getInstance().then((p) => p.setString('font', newFont));
+  }
+
+  void changeColor(String newColor) {
+    setState(() => currentColor = newColor);
+    SharedPreferences.getInstance().then((p) => p.setString('accentColor', newColor));
+  }
 
   TextTheme _getTextTheme() {
     switch (currentFont) {
-      case 'oswald': return GoogleFonts.oswaldTextTheme();
-      case 'lato': return GoogleFonts.latoTextTheme();
-      case 'poppins': return GoogleFonts.poppinsTextTheme();
-      default: return GoogleFonts.manropeTextTheme();
+      case 'oswald':
+        return GoogleFonts.oswaldTextTheme();
+      case 'lato':
+        return GoogleFonts.latoTextTheme();
+      case 'poppins':
+        return GoogleFonts.poppinsTextTheme();
+      default:
+        return GoogleFonts.manropeTextTheme();
     }
   }
 
@@ -104,7 +119,11 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       extendBody: true,
       body: _currentIndex == 0
-          ? HomeTab(theme: widget.currentTheme, accentColor: widget.currentColor)
+          ? HomeTab(
+              key: ValueKey(widget.currentTheme), // Ключ для обновления при смене темы
+              theme: widget.currentTheme,
+              accentColor: widget.currentColor,
+            )
           : SettingsTab(
               currentTheme: widget.currentTheme,
               onThemeChanged: widget.onThemeChanged,
@@ -119,7 +138,13 @@ class _MainScreenState extends State<MainScreen> {
           color: const Color(0xFF1B1E21).withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(30),
           border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 20, offset: const Offset(0, 10))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.5),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            )
+          ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(30),
@@ -128,7 +153,7 @@ class _MainScreenState extends State<MainScreen> {
             onTap: (index) => setState(() => _currentIndex = index),
             backgroundColor: Colors.transparent,
             elevation: 0,
-            selectedItemColor: const Color(0xFFFF2BD6),
+            selectedItemColor: Color(int.parse(widget.currentColor.replaceFirst('#', '0xff'))),
             unselectedItemColor: Colors.grey,
             items: const [
               BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Главная'),
@@ -177,16 +202,22 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     super.initState();
     _loadSettings();
     _checkInternet();
-    
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
-    _bgController = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat(reverse: true);
+
+    _pulseController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat(reverse: true);
+    _bgController = AnimationController(
+        vsync: this, duration: const Duration(seconds: 8))
+      ..repeat(reverse: true);
 
     v2ray = V2ray(
       onStatusChanged: (status) {
         if (mounted) setState(() => connectionState = status.state);
       },
     );
-    v2ray.initialize(notificationIconResourceType: "mipmap", notificationIconResourceName: "ic_launcher");
+    v2ray.initialize(
+        notificationIconResourceType: "mipmap",
+        notificationIconResourceName: "ic_launcher");
   }
 
   @override
@@ -197,10 +228,10 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   }
 
   Future<void> _checkInternet() async {
-    final connectivityResult = await Connectivity().checkConnectivity();
+    final results = await Connectivity().checkConnectivity();
     if (mounted) {
       setState(() {
-        hasInternet = connectivityResult != ConnectivityResult.none;
+        hasInternet = results.isNotEmpty && !results.contains(ConnectivityResult.none);
       });
     }
   }
@@ -215,10 +246,30 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
 
   Map<String, Color> getThemeColors() {
     switch (widget.theme) {
-      case 'autumn': return {'bg': const Color(0xFF120B07), 'accent': getAccentColor(), 'accent2': const Color(0xFFC2391B)};
-      case 'ice': return {'bg': const Color(0xFF070C16), 'accent': getAccentColor(), 'accent2': const Color(0xFF3D5BFF)};
-      case 'hw': return {'bg': const Color(0xFF0D0814), 'accent': getAccentColor(), 'accent2': const Color(0xFF8B2CFF)};
-      default: return {'bg': const Color(0xFF0A0812), 'accent': getAccentColor(), 'accent2': const Color(0xFF7B2CFF)};
+      case 'autumn':
+        return {
+          'bg': const Color(0xFF120B07),
+          'accent': getAccentColor(),
+          'accent2': const Color(0xFFC2391B)
+        };
+      case 'ice':
+        return {
+          'bg': const Color(0xFF070C16),
+          'accent': getAccentColor(),
+          'accent2': const Color(0xFF3D5BFF)
+        };
+      case 'hw':
+        return {
+          'bg': const Color(0xFF0D0814),
+          'accent': getAccentColor(),
+          'accent2': const Color(0xFF8B2CFF)
+        };
+      default:
+        return {
+          'bg': const Color(0xFF0A0812),
+          'accent': getAccentColor(),
+          'accent2': const Color(0xFF7B2CFF)
+        };
     }
   }
 
@@ -250,30 +301,49 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           final kv = part.trim().split('=');
           if (kv.length == 2) {
             switch (kv[0]) {
-              case 'upload': upload = int.tryParse(kv[1]) ?? 0; break;
-              case 'download': download = int.tryParse(kv[1]) ?? 0; break;
-              case 'total': total = int.tryParse(kv[1]) ?? 0; break;
-              case 'expire': expire = int.tryParse(kv[1]) ?? 0; break;
+              case 'upload':
+                upload = int.tryParse(kv[1]) ?? 0;
+                break;
+              case 'download':
+                download = int.tryParse(kv[1]) ?? 0;
+                break;
+              case 'total':
+                total = int.tryParse(kv[1]) ?? 0;
+                break;
+              case 'expire':
+                expire = int.tryParse(kv[1]) ?? 0;
+                break;
             }
           }
         }
-        trafficUsed = "${((upload + download) / (1024 * 1024 * 1024)).toStringAsFixed(2)} ГБ";
+        trafficUsed =
+            "${((upload + download) / (1024 * 1024 * 1024)).toStringAsFixed(2)} ГБ";
         trafficTotal = "${(total / (1024 * 1024 * 1024)).toStringAsFixed(1)} ГБ";
-        if (expire > 0) expireDate = DateTime.fromMillisecondsSinceEpoch(expire * 1000).toString().split(' ')[0];
+        if (expire > 0) {
+          expireDate = DateTime.fromMillisecondsSinceEpoch(expire * 1000)
+              .toString()
+              .split(' ')[0];
+        }
       }
 
       final content = response.body.trim();
       String decodedContent = content;
-      try { decodedContent = utf8.decode(base64.decode(content)); } catch (_) {}
+      try {
+        decodedContent = utf8.decode(base64.decode(content));
+      } catch (_) {}
 
-      final lines = decodedContent.split('\n');
       parsedServers.clear();
-      for (var line in lines) {
+      for (var line in decodedContent.split('\n')) {
         line = line.trim();
-        if (line.startsWith('vless://') || line.startsWith('vmess://') || 
-            line.startsWith('trojan://') || line.startsWith('hy2://') || 
-            line.startsWith('hysteria2://') || line.startsWith('ss://')) {
-          try { parsedServers.add(V2ray.parseFromURL(line)); } catch (_) {}
+        if (line.startsWith('vless://') ||
+            line.startsWith('vmess://') ||
+            line.startsWith('trojan://') ||
+            line.startsWith('hy2://') ||
+            line.startsWith('hysteria2://') ||
+            line.startsWith('ss://')) {
+          try {
+            parsedServers.add(V2ray.parseFromURL(line));
+          } catch (_) {}
         }
       }
       if (parsedServers.isEmpty) {
@@ -290,17 +360,11 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
 
   Future<void> _measurePings() async {
     for (int i = 0; i < parsedServers.length; i++) {
-      final server = parsedServers[i];
-      final address = server.address ?? '';
-      if (address.isEmpty) continue;
-      
       try {
-        final start = DateTime.now();
-        final socket = await Socket.connect(address, 443, timeout: const Duration(seconds: 3));
-        socket.destroy();
-        final ping = DateTime.now().difference(start).inMilliseconds;
-        if (mounted) setState(() => serverPings[i] = ping);
-      } catch (e) {
+        final delay = await v2ray.getServerDelay(
+            config: parsedServers[i].getFullConfiguration());
+        if (mounted) setState(() => serverPings[i] = delay);
+      } catch (_) {
         if (mounted) setState(() => serverPings[i] = 9999);
       }
     }
@@ -333,9 +397,9 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       final hasPermission = await v2ray.requestPermission();
       if (hasPermission) {
         await v2ray.startV2Ray(
-          remark: parser.remark, 
-          config: parser.getFullConfiguration(), 
-          proxyOnly: false
+          remark: parser.remark,
+          config: parser.getFullConfiguration(),
+          proxyOnly: false,
         );
         await Future.delayed(const Duration(milliseconds: 500));
         if (mounted) setState(() => connectionState = 'CONNECTED');
@@ -351,10 +415,17 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
 
   void _showErrorDialog(String message) {
     if (mounted) {
-      showDialog(context: context, builder: (ctx) => AlertDialog(
-        title: const Text('Ошибка'), content: Text(message),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ОК'))],
-      ));
+      showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+                title: const Text('Ошибка'),
+                content: Text(message),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('ОК'))
+                ],
+              ));
     }
   }
 
@@ -367,7 +438,8 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1B1E21),
-        title: const Text('QR-код подписки', style: TextStyle(color: Colors.white)),
+        title: const Text('QR-код подписки',
+            style: TextStyle(color: Colors.white)),
         content: Container(
           width: 250,
           height: 250,
@@ -381,7 +453,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Закрыть', style: TextStyle(color: Color(0xFFFF2BD6))),
+            child: Text('Закрыть', style: TextStyle(color: getAccentColor())),
           ),
         ],
       ),
@@ -401,21 +473,21 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
             return Container(
               decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  center: Alignment(-0.8 + (_bgController.value * 0.2), -0.8 + (_bgController.value * 0.1)),
+                  center: Alignment(-0.8 + (_bgController.value * 0.2),
+                      -0.8 + (_bgController.value * 0.1)),
                   radius: 1.8,
                   colors: [
                     colors['bg']!,
-                    colors['accent2']!.withValues(alpha: 0.3 + (_bgController.value * 0.2)),
+                    colors['accent2']!
+                        .withValues(alpha: 0.3 + (_bgController.value * 0.2)),
                   ],
                 ),
               ),
             );
           },
         ),
-        
-        if (effectType != 'off' && mounted) 
+        if (effectType != 'off' && mounted)
           WeatherEffect(key: ValueKey(effectType), type: effectType),
-
         SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 100),
@@ -439,32 +511,45 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                                 color: colors['accent']!.withValues(alpha: 0.2),
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(Icons.shield_rounded, color: colors['accent'], size: 24),
+                              child: Icon(Icons.shield_rounded,
+                                  color: colors['accent'], size: 24),
                             );
                           },
                         ),
                       ),
                       const SizedBox(width: 10),
-                      Text('Monta VPN', style: GoogleFonts.manrope(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 1)),
+                      Text('Monta VPN',
+                          style: GoogleFonts.manrope(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: 1)),
                       const Spacer(),
                       if (!hasInternet)
-                        Icon(Icons.wifi_off_rounded, color: Colors.red, size: 24),
+                        const Icon(Icons.wifi_off_rounded,
+                            color: Colors.red, size: 24),
                       IconButton(
-                        icon: Icon(Icons.qr_code_rounded, color: colors['accent'], size: 24),
+                        icon: Icon(Icons.qr_code_rounded,
+                            color: colors['accent'], size: 24),
                         onPressed: _showQRCode,
                       ),
                     ],
                   ),
                 ),
-
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20),
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.03),
                     borderRadius: BorderRadius.circular(32),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 30, offset: const Offset(0, 15))],
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 30,
+                          offset: const Offset(0, 15))
+                    ],
                   ),
                   child: Column(
                     children: [
@@ -472,12 +557,19 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                         alignment: Alignment.center,
                         children: [
                           ScaleTransition(
-                            scale: Tween(begin: 0.95, end: 1.15).animate(_pulseController),
+                            scale: Tween(begin: 0.95, end: 1.15)
+                                .animate(_pulseController),
                             child: Container(
-                              width: 200, height: 200,
+                              width: 200,
+                              height: 200,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: Border.all(color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.15), width: 1),
+                                border: Border.all(
+                                    color: (isConnected
+                                            ? Colors.green
+                                            : colors['accent']!)
+                                        .withValues(alpha: 0.15),
+                                    width: 1),
                               ),
                             ),
                           ),
@@ -485,25 +577,39 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                             onTap: isLoading ? null : toggleVPN,
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 250),
-                              width: 150, height: 150,
+                              width: 150,
+                              height: 150,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 gradient: LinearGradient(
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
-                                  colors: isConnected ? [Colors.green, Colors.greenAccent] : [colors['accent']!, colors['accent2']!],
+                                  colors: isConnected
+                                      ? [Colors.green, Colors.greenAccent]
+                                      : [
+                                          colors['accent']!,
+                                          colors['accent2']!
+                                        ],
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: (isConnected ? Colors.green : colors['accent']!).withValues(alpha: 0.6),
+                                    color: (isConnected
+                                            ? Colors.green
+                                            : colors['accent']!)
+                                        .withValues(alpha: 0.6),
                                     blurRadius: 40,
                                     spreadRadius: 10,
                                   ),
                                 ],
                               ),
                               child: isLoading
-                                  ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                                  : const Icon(Icons.power_settings_new_rounded, size: 60, color: Colors.white),
+                                  ? const Center(
+                                      child: CircularProgressIndicator(
+                                          color: Colors.white))
+                                  : const Icon(
+                                      Icons.power_settings_new_rounded,
+                                      size: 60,
+                                      color: Colors.white),
                             ),
                           ),
                         ],
@@ -511,43 +617,56 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                       const SizedBox(height: 20),
                       Text(
                         isConnected ? 'VPN Включен' : 'VPN Отключен',
-                        style: GoogleFonts.manrope(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white),
+                        style: GoogleFonts.manrope(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white),
                       ),
                       const SizedBox(height: 5),
                       Text(
-                        isConnected ? 'Ваш трафик защищен' : 'Нажмите для подключения',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+                        isConnected
+                            ? 'Ваш трафик защищен'
+                            : 'Нажмите для подключения',
+                        style:
+                            TextStyle(fontSize: 14, color: Colors.grey[400]),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 20),
-
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
                     children: [
-                      Expanded(child: _buildInfoCard(Icons.data_usage_rounded, 'Трафик', '$trafficUsed / $trafficTotal')),
+                      Expanded(
+                          child: _buildInfoCard(Icons.data_usage_rounded,
+                              'Трафик', '$trafficUsed / $trafficTotal')),
                       const SizedBox(width: 12),
-                      Expanded(child: _buildInfoCard(Icons.calendar_today_rounded, 'Срок', expireDate)),
+                      Expanded(
+                          child: _buildInfoCard(Icons.calendar_today_rounded,
+                              'Срок', expireDate)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 20),
-
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                      border:
+                          Border.all(color: Colors.white.withValues(alpha: 0.1)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Авто-выбор сервера', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                        const Text('Авто-выбор сервера',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white)),
                         Switch(
                           value: autoSelect,
                           activeColor: colors['accent'],
@@ -563,7 +682,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                   ),
                 ),
                 const SizedBox(height: 20),
-
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Container(
@@ -571,7 +689,8 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.03),
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                      border:
+                          Border.all(color: Colors.white.withValues(alpha: 0.08)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -579,9 +698,14 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Серверы', style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                            Text('Серверы',
+                                style: GoogleFonts.manrope(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white)),
                             IconButton(
-                              icon: const Icon(Icons.refresh_rounded, color: Colors.grey, size: 20),
+                              icon: const Icon(Icons.refresh_rounded,
+                                  color: Colors.grey, size: 20),
                               onPressed: () {
                                 _checkInternet();
                                 _fetchSubscription();
@@ -595,8 +719,13 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                             padding: const EdgeInsets.all(20),
                             child: Center(
                               child: Text(
-                                hasInternet ? 'Подписка не добавлена' : 'У вас нет интернета',
-                                style: TextStyle(color: hasInternet ? Colors.grey : Colors.red),
+                                hasInternet
+                                    ? 'Подписка не добавлена'
+                                    : 'У вас нет интернета',
+                                style: TextStyle(
+                                    color: hasInternet
+                                        ? Colors.grey
+                                        : Colors.red),
                               ),
                             ),
                           )
@@ -604,25 +733,41 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                           ...parsedServers.asMap().entries.map((entry) {
                             final ping = serverPings[entry.key];
                             return GestureDetector(
-                              onTap: () => setState(() => currentServer = entry.key),
+                              onTap: () =>
+                                  setState(() => currentServer = entry.key),
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
                                 margin: const EdgeInsets.only(bottom: 8),
                                 padding: const EdgeInsets.all(14),
                                 decoration: BoxDecoration(
-                                  color: currentServer == entry.key ? colors['accent']!.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.03),
+                                  color: currentServer == entry.key
+                                      ? colors['accent']!
+                                          .withValues(alpha: 0.15)
+                                      : Colors.white.withValues(alpha: 0.03),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: currentServer == entry.key ? colors['accent']! : Colors.transparent, width: 1.5),
+                                  border: Border.all(
+                                      color: currentServer == entry.key
+                                          ? colors['accent']!
+                                          : Colors.transparent,
+                                      width: 1.5),
                                 ),
                                 child: Row(
                                   children: [
                                     Container(
                                       padding: const EdgeInsets.all(6),
                                       decoration: BoxDecoration(
-                                        color: currentServer == entry.key ? colors['accent']!.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
+                                        color: currentServer == entry.key
+                                            ? colors['accent']!
+                                                .withValues(alpha: 0.2)
+                                            : Colors.white
+                                                .withValues(alpha: 0.05),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: Icon(Icons.dns_rounded, color: currentServer == entry.key ? colors['accent'] : Colors.grey, size: 18),
+                                      child: Icon(Icons.dns_rounded,
+                                          color: currentServer == entry.key
+                                              ? colors['accent']
+                                              : Colors.grey,
+                                          size: 18),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
@@ -631,7 +776,9 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                                         style: TextStyle(
                                           color: Colors.white,
                                           fontSize: 14,
-                                          fontWeight: currentServer == entry.key ? FontWeight.bold : FontWeight.normal,
+                                          fontWeight: currentServer == entry.key
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
                                         ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -640,13 +787,20 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                                       Text(
                                         ping == 9999 ? 'н/д' : '$ping мс',
                                         style: TextStyle(
-                                          color: ping == 9999 ? Colors.red : ping < 100 ? Colors.green : ping < 200 ? Colors.orange : Colors.red,
+                                          color: ping == 9999
+                                              ? Colors.red
+                                              : ping < 100
+                                                  ? Colors.green
+                                                  : ping < 200
+                                                      ? Colors.orange
+                                                      : Colors.red,
                                           fontSize: 12,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                     if (currentServer == entry.key)
-                                      Icon(Icons.check_circle_rounded, color: colors['accent'], size: 20),
+                                      Icon(Icons.check_circle_rounded,
+                                          color: colors['accent'], size: 20),
                                   ],
                                 ),
                               ),
@@ -671,7 +825,12 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         color: Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 5))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 5))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -687,7 +846,11 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           const SizedBox(height: 10),
           Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[400])),
           const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white)),
         ],
       ),
     );
@@ -703,7 +866,8 @@ class WeatherEffect extends StatefulWidget {
   State<WeatherEffect> createState() => _WeatherEffectState();
 }
 
-class _WeatherEffectState extends State<WeatherEffect> with SingleTickerProviderStateMixin {
+class _WeatherEffectState extends State<WeatherEffect>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   final List<Particle> _particles = [];
   final Random _random = Random();
@@ -711,7 +875,9 @@ class _WeatherEffectState extends State<WeatherEffect> with SingleTickerProvider
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(seconds: 1))
+      ..repeat();
     final count = widget.type == 'leaves' ? 20 : 40;
     for (int i = 0; i < count; i++) {
       _particles.add(Particle.random(_random, widget.type));
@@ -736,7 +902,8 @@ class _WeatherEffectState extends State<WeatherEffect> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(painter: ParticlePainter(_particles, widget.type), size: Size.infinite);
+    return CustomPaint(
+        painter: ParticlePainter(_particles, widget.type), size: Size.infinite);
   }
 }
 
@@ -744,9 +911,17 @@ class Particle {
   double x, y, speed, size, angle, rotationSpeed;
   String type;
   Color color;
-  
-  Particle({required this.x, required this.y, required this.speed, required this.size, required this.type, required this.angle, required this.rotationSpeed, required this.color});
-  
+
+  Particle(
+      {required this.x,
+      required this.y,
+      required this.speed,
+      required this.size,
+      required this.type,
+      required this.angle,
+      required this.rotationSpeed,
+      required this.color});
+
   factory Particle.random(Random random, String type) {
     final isLeaf = type == 'leaves';
     return Particle(
@@ -757,12 +932,17 @@ class Particle {
       type: type,
       angle: random.nextDouble() * 6,
       rotationSpeed: (random.nextDouble() - 0.5) * 0.1,
-      color: isLeaf 
-          ? [const Color(0xFFFF8A1F), const Color(0xFFD9461A), const Color(0xFFF2B134), const Color(0xFFA8341C)][random.nextInt(4)]
+      color: isLeaf
+          ? [
+              const Color(0xFFFF8A1F),
+              const Color(0xFFD9461A),
+              const Color(0xFFF2B134),
+              const Color(0xFFA8341C)
+            ][random.nextInt(4)]
           : Colors.white.withValues(alpha: 0.6),
     );
   }
-  
+
   void update() {
     y += speed;
     if (type == 'leaves') {
@@ -785,14 +965,21 @@ class ParticlePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     for (var p in particles) {
       if (type == 'snow') {
-        final paint = Paint()..color = p.color..style = PaintingStyle.fill;
+        final paint = Paint()
+          ..color = p.color
+          ..style = PaintingStyle.fill;
         canvas.drawCircle(Offset(p.x, p.y), p.size, paint);
       } else {
         canvas.save();
         canvas.translate(p.x, p.y);
         canvas.rotate(p.angle);
-        final paint = Paint()..color = p.color..style = PaintingStyle.fill;
-        canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: p.size, height: p.size / 2), paint);
+        final paint = Paint()
+          ..color = p.color
+          ..style = PaintingStyle.fill;
+        canvas.drawOval(
+            Rect.fromCenter(
+                center: Offset.zero, width: p.size, height: p.size / 2),
+            paint);
         canvas.restore();
       }
     }
@@ -802,7 +989,7 @@ class ParticlePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// --- НАСТРОЙКИ ---
+// --- НАСТРОЙКИ (ПОЛНОСТЬЮ ДОПИСАННЫЙ БЛОК) ---
 class SettingsTab extends StatefulWidget {
   final String currentTheme;
   final Function(String) onThemeChanged;
@@ -867,76 +1054,263 @@ class _SettingsTabState extends State<SettingsTab> {
     await prefs.setBool('fragmentation', fragmentation);
     await prefs.setString('effectType', effectType);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Сохранено!')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сохранено!')),
+      );
     }
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10, top: 5),
+      child: Text(title,
+          style: GoogleFonts.manrope(
+              fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
+    );
+  }
+
+  Widget _buildSwitch(String title, String subtitle, bool value,
+      Function(bool) onChanged) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14)),
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style: TextStyle(color: Colors.grey[400], fontSize: 11)),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            activeColor: Color(int.parse(widget.currentColor.replaceFirst('#', '0xff'))),
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF0A0812), Color(0xFF120B1A)])),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF0A0812), Color(0xFF120B1A)],
+        ),
+      ),
       child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Настройки', style: GoogleFonts.manrope(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
+              Text('Настройки',
+                  style: GoogleFonts.manrope(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white)),
               const SizedBox(height: 30),
-
               _buildSectionTitle('Подписка'),
               TextField(
                 controller: _linkController,
                 style: const TextStyle(color: Colors.white, fontSize: 13),
                 maxLines: 3,
-                decoration: InputDecoration(hintText: 'https://...', hintStyle: const TextStyle(color: Colors.grey), filled: true, fillColor: Colors.white.withValues(alpha: 0.05), border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)),
+                decoration: InputDecoration(
+                  hintText: 'https://...',
+                  hintStyle: const TextStyle(color: Colors.grey),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.05),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none),
+                ),
               ),
               const SizedBox(height: 20),
-
               _buildSectionTitle('Туннель'),
-              _buildSwitch('Обход РФ', 'Госуслуги и банки напрямую', bypassRussia, (v) => setState(() => bypassRussia = v)),
+              _buildSwitch('Обход РФ', 'Госуслуги и банки напрямую', bypassRussia,
+                  (v) => setState(() => bypassRussia = v)),
               const SizedBox(height: 10),
-              _buildSwitch('Kill Switch', 'Блокировать интернет при обрыве VPN', killSwitch, (v) => setState(() => killSwitch = v)),
+              _buildSwitch('Kill Switch', 'Блокировать интернет при обрыве VPN',
+                  killSwitch, (v) => setState(() => killSwitch = v)),
               const SizedBox(height: 10),
-              _buildSwitch('Автозапуск', 'Включать VPN при старте телефона', autoStart, (v) => setState(() => autoStart = v)),
+              _buildSwitch('Автозапуск', 'Включать VPN при старте телефона',
+                  autoStart, (v) => setState(() => autoStart = v)),
               const SizedBox(height: 10),
-              _buildSwitch('Фрагментация', 'Обход DPI (если провайдер режет)', fragmentation, (v) => setState(() => fragmentation = v)),
+              _buildSwitch('Фрагментация', 'Обход DPI (если провайдер режет)',
+                  fragmentation, (v) => setState(() => fragmentation = v)),
               const SizedBox(height: 20),
-
               _buildSectionTitle('Внешний вид'),
-              Text('Цвет акцента', style: GoogleFonts.manrope(fontSize: 14, color: Colors.grey)),
+              Text('Цвет акцента',
+                  style: GoogleFonts.manrope(
+                      fontSize: 14, color: Colors.grey)),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: [
-                  '#ff2bd6', '#ff8a1f', '#34b6ff', '#2ee6a6', '#8b2cff', '#ff5c6c', '#ffb020'
+                  '#ff2bd6',
+                  '#ff8a1f',
+                  '#34b6ff',
+                  '#2ee6a6',
+                  '#8b2cff',
+                  '#ff5c6c',
+                  '#ffb020'
                 ].map((color) {
                   final isSelected = widget.currentColor == color;
                   return GestureDetector(
-                    onTap: () {
-                      widget.onColorChanged(color);
-                      SharedPreferences.getInstance().then((prefs) {
-                        prefs.setString('accentColor', color);
-                      });
-                    },
+                    onTap: () => widget.onColorChanged(color),
                     child: Container(
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: Color(int.parse(color.replaceFirst('#', '0xff'))),
+                        color: Color(
+                            int.parse(color.replaceFirst('#', '0xff'))),
                         shape: BoxShape.circle,
-                        border: isSelected ? Border.all(color: Colors.white, width: 3) : null,
-                        boxShadow: [BoxShadow(color: Color(int.parse(color.replaceFirst('#', '0xff'))).withValues(alpha: 0.5), blurRadius: 10)],
+                        border: isSelected
+                            ? Border.all(color: Colors.white, width: 3)
+                            : null,
+                        boxShadow: [
+                          BoxShadow(
+                              color: Color(
+                                      int.parse(color.replaceFirst('#', '0xff')))
+                                  .withValues(alpha: 0.5),
+                              blurRadius: 10)
+                        ],
                       ),
-                      child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
+                      child: isSelected
+                          ? const Icon(Icons.check,
+                              color: Colors.white, size: 20)
+                          : null,
                     ),
                   );
                 }).toList(),
               ),
               const SizedBox(height: 15),
-              Text('Тема', style: GoogleFonts.manrope(fontSize: 14, color: Colors.grey)),
+              Text('Тема',
+                  style: GoogleFonts.manrope(
+                      fontSize: 14, color: Colors.grey)),
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(color: Colors.white.with
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: widget.currentTheme,
+                    dropdownColor: const Color(0xFF1B1E21),
+                    isExpanded: true,
+                    icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                    style: const TextStyle(color: Colors.white),
+                    items: const [
+                      DropdownMenuItem(value: 'neon', child: Text('Neon')),
+                      DropdownMenuItem(value: 'autumn', child: Text('Autumn')),
+                      DropdownMenuItem(value: 'ice', child: Text('Ice')),
+                      DropdownMenuItem(value: 'hw', child: Text('Hacker Way')),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) widget.onThemeChanged(v);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 15),
+              Text('Шрифт',
+                  style: GoogleFonts.manrope(
+                      fontSize: 14, color: Colors.grey)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: widget.currentFont,
+                    dropdownColor: const Color(0xFF1B1E21),
+                    isExpanded: true,
+                    icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                    style: const TextStyle(color: Colors.white),
+                    items: const [
+                      DropdownMenuItem(value: 'manrope', child: Text('Manrope')),
+                      DropdownMenuItem(value: 'oswald', child: Text('Oswald')),
+                      DropdownMenuItem(value: 'lato', child: Text('Lato')),
+                      DropdownMenuItem(value: 'poppins', child: Text('Poppins')),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) widget.onFontChanged(v);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 15),
+              Text('Эффекты',
+                  style: GoogleFonts.manrope(
+                      fontSize: 14, color: Colors.grey)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: effectType,
+                    dropdownColor: const Color(0xFF1B1E21),
+                    isExpanded: true,
+                    icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                    style: const TextStyle(color: Colors.white),
+                    items: const [
+                      DropdownMenuItem(value: 'off', child: Text('Выкл')),
+                      DropdownMenuItem(value: 'snow', child: Text('Снег')),
+                      DropdownMenuItem(value: 'leaves', child: Text('Листопад')),
+                    ],
+                    onChanged: (v) => setState(() => effectType = v ?? 'off'),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 30),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _saveSettings,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(
+                        int.parse(widget.currentColor.replaceFirst('#', '0xff'))),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: const Text('Сохранить',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
